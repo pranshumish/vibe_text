@@ -1,0 +1,29 @@
+# Compiled Object files
+*.o
+*.obj
+
+# Executable files
+text_editor
+*.exe
+*.out
+
+# Build artifacts
+*.a
+*.so
+*.dylib
+
+# Editor backup files
+*~
+*.swp
+*.swo
+.DS_Store
+
+# IDE files
+.vscode/
+.idea/
+*.code-workspace
+
+# Temporary files
+*.tmp
+*.log
+
