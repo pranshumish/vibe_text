@@ -4,19 +4,24 @@ export class TrieVisualizer {
         this.ctx = ctx
         this.root = { children: {}, isEnd: false }
         this.words = []
+        this.dictionaryLoaded = false
+        this.loadDictionary()
     }
 
-    updateFromText(text, textEditor) {
-        // Rebuild trie from all words in text
-        this.root = { children: {}, isEnd: false }
-        this.words = []
+    async loadDictionary() {
+        try {
+            const response = await fetch('/dictionary.txt')
+            const text = await response.text()
+            const words = text.split('\n').map(w => w.trim()).filter(w => w.length > 0)
 
-        const words = text.match(/\b[a-z]+\b/gi) || []
-        const uniqueWords = [...new Set(words.map(w => w.toLowerCase()))]
-
-        uniqueWords.forEach(word => {
-            this.insert(word)
-        })
+            this.root = { children: {}, isEnd: false }
+            words.forEach(word => this.insert(word))
+            this.dictionaryLoaded = true
+            console.log(`Loaded ${words.length} words into Trie`)
+            this.draw()
+        } catch (e) {
+            console.error('Failed to load dictionary:', e)
+        }
     }
 
     insert(word) {
@@ -28,37 +33,23 @@ export class TrieVisualizer {
             node = node.children[char]
         }
         node.isEnd = true
-        if (!this.words.includes(word)) {
-            this.words.push(word)
-        }
+    }
+
+    updateFromText(text, textEditor) {
+        if (!this.dictionaryLoaded) return
+
+        // Get the word currently being typed (prefix)
+        const cursorPosition = textEditor.getCursorPosition()
+        const textBeforeCursor = text.substring(0, cursorPosition)
+        const match = textBeforeCursor.match(/\b[a-zA-Z]+$/)
+
+        this.currentPrefix = match ? match[0].toLowerCase() : ''
         this.draw()
     }
 
-    search(word) {
-        let node = this.root
-        for (const char of word) {
-            if (!node.children[char]) {
-                return false
-            }
-            node = node.children[char]
-        }
-        return node.isEnd
-    }
-
-    startsWith(prefix) {
-        let node = this.root
-        for (const char of prefix) {
-            if (!node.children[char]) {
-                return false
-            }
-            node = node.children[char]
-        }
-        return true
-    }
-
     reset() {
-        this.root = { children: {}, isEnd: false }
-        this.words = []
+        // Just clear the prefix, don't clear the trie
+        this.currentPrefix = ''
         this.draw()
     }
 
@@ -68,31 +59,87 @@ export class TrieVisualizer {
 
         ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-        if (this.words.length === 0) {
+        if (!this.dictionaryLoaded) {
             ctx.fillStyle = '#94a3b8'
             ctx.font = '16px Inter'
             ctx.textAlign = 'center'
             ctx.textBaseline = 'middle'
-            ctx.fillText('No words yet', canvas.width / 2, canvas.height / 2)
+            ctx.fillText('Loading dictionary...', canvas.width / 2, canvas.height / 2)
             return
         }
 
-        // Calculate tree layout
-        const levelHeight = 60
-        const startY = 40
-        const centerX = canvas.width / 2
+        if (!this.currentPrefix) {
+            ctx.fillStyle = '#94a3b8'
+            ctx.font = '16px Inter'
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText('Type to see autocomplete suggestions', canvas.width / 2, canvas.height / 2)
+            return
+        }
 
-        // Draw root
-        this.drawNode(centerX, startY, 'ROOT', false, true)
+        // Display current prefix
+        ctx.fillStyle = '#667eea'
+        ctx.font = 'bold 18px Inter'
+        ctx.textAlign = 'center'
+        ctx.fillText(`Autocomplete for: "${this.currentPrefix}"`, canvas.width / 2, 30)
 
-        // Draw tree recursively
-        this.drawTree(this.root, centerX, startY, canvas.width / 2, 1)
+        // Find the node corresponding to the prefix
+        let prefixNode = this.root
+        let path = []
+        for (const char of this.currentPrefix) {
+            if (prefixNode.children[char]) {
+                prefixNode = prefixNode.children[char]
+                path.push(prefixNode)
+            } else {
+                // Prefix not found in dictionary
+                ctx.fillStyle = '#ef4444'
+                ctx.font = '16px Inter'
+                ctx.textAlign = 'center'
+                ctx.fillText(`No suggestions found for "${this.currentPrefix}"`, canvas.width / 2, canvas.height / 2)
+                return
+            }
+        }
 
-        // Draw word list
-        this.drawWordList()
+        // Collect all completions from this node
+        const completions = []
+        this.collectWords(prefixNode, this.currentPrefix, completions)
+
+        // Layout parameters
+        const startX = canvas.width / 2
+        const startY = 60
+        const levelHeight = 50
+
+        // Draw the prefix path (linear vertical)
+        this.drawNode(startX, startY, 'ROOT', false, true)
+
+        let currentY = startY + levelHeight
+        let parentX = startX
+
+        // Draw path nodes
+        path.forEach((node, index) => {
+            // Line from parent
+            ctx.strokeStyle = '#667eea'
+            ctx.lineWidth = 3
+            ctx.beginPath()
+            ctx.moveTo(parentX, currentY - levelHeight + 15)
+            ctx.lineTo(parentX, currentY - 15)
+            ctx.stroke()
+
+            this.drawNode(parentX, currentY, node.char, node.isEnd && index === path.length - 1)
+
+            // If it's the last node of prefix, draw its children (suggestions)
+            if (index === path.length - 1) {
+                this.drawSuggestions(node, parentX, currentY, canvas.width)
+            }
+
+            currentY += levelHeight
+        })
+
+        // Draw suggestions list at bottom
+        this.drawSuggestionsList(completions)
     }
 
-    drawTree(node, x, y, spread, level) {
+    drawSuggestions(node, x, y, width) {
         const ctx = this.ctx
         const children = Object.values(node.children).sort((a, b) => a.char.localeCompare(b.char))
 
@@ -100,39 +147,73 @@ export class TrieVisualizer {
 
         const levelHeight = 60
         const childY = y + levelHeight
-        const childSpread = spread / children.length
+        // Limit max children to avoid overcrowding
+        const maxChildren = 8
+        const visibleChildren = children.slice(0, maxChildren)
+
+        const spread = Math.min(width - 40, visibleChildren.length * 50)
+        const childSpread = spread / visibleChildren.length
         const startX = x - (spread / 2) + (childSpread / 2)
 
-        children.forEach((child, index) => {
+        visibleChildren.forEach((child, index) => {
             const childX = startX + index * childSpread
 
-            // Draw line to child
-            ctx.strokeStyle = 'rgba(102, 126, 234, 0.4)'
-            ctx.lineWidth = 2
+            // Draw line
+            ctx.strokeStyle = 'rgba(118, 75, 162, 0.5)'
+            ctx.lineWidth = 1
             ctx.beginPath()
             ctx.moveTo(x, y + 15)
             ctx.lineTo(childX, childY - 15)
             ctx.stroke()
 
-            // Draw edge label (character)
-            const midX = (x + childX) / 2
-            const midY = (y + childY) / 2
-            ctx.fillStyle = '#667eea'
-            ctx.font = 'bold 13px Inter'
-            ctx.textAlign = 'center'
-            ctx.fillText(child.char, midX, midY - 5)
+            // Draw node
+            this.drawNode(childX, childY, child.char, child.isEnd, false, true)
 
-            // Draw child node
-            this.drawNode(childX, childY, child.char, child.isEnd)
-
-            // Recursively draw children
-            if (level < 4) { // Limit depth for visualization
-                this.drawTree(child, childX, childY, childSpread, level + 1)
+            // Draw subtree (simplified) - just one more level to hint branches
+            if (Object.keys(child.children).length > 0) {
+                this.drawSimpleSubtree(child, childX, childY)
             }
         })
+
+        if (children.length > maxChildren) {
+            ctx.fillStyle = '#94a3b8'
+            ctx.font = '12px Inter'
+            ctx.fillText(`+${children.length - maxChildren} more`, x + spread / 2 + 30, childY)
+        }
     }
 
-    drawNode(x, y, label, isEnd, isRoot = false) {
+    drawSimpleSubtree(node, x, y) {
+        const ctx = this.ctx
+        const children = Object.values(node.children)
+        if (children.length === 0) return
+
+        const childY = y + 30
+        ctx.strokeStyle = 'rgba(118, 75, 162, 0.3)'
+        ctx.beginPath()
+        ctx.moveTo(x, y + 15)
+        ctx.lineTo(x, childY)
+        ctx.stroke()
+
+        // little dot
+        ctx.fillStyle = 'rgba(118, 75, 162, 0.5)'
+        ctx.beginPath()
+        ctx.arc(x, childY, 2, 0, Math.PI * 2)
+        ctx.fill()
+    }
+
+    collectWords(node, currentWord, results, limit = 20) {
+        if (results.length >= limit) return
+
+        if (node.isEnd) {
+            results.push(currentWord)
+        }
+
+        for (const char in node.children) {
+            this.collectWords(node.children[char], currentWord + char, results, limit)
+        }
+    }
+
+    drawNode(x, y, label, isEnd, isRoot = false, isSuggestion = false) {
         const ctx = this.ctx
         const radius = isRoot ? 20 : 15
 
@@ -144,9 +225,12 @@ export class TrieVisualizer {
 
         // Node circle
         const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius)
-        if (isEnd) {
-            gradient.addColorStop(0, '#667eea')
-            gradient.addColorStop(1, '#764ba2')
+        if (isSuggestion) {
+            gradient.addColorStop(0, '#764ba2')
+            gradient.addColorStop(1, '#667eea')
+        } else if (isEnd) {
+            gradient.addColorStop(0, '#10b981')
+            gradient.addColorStop(1, '#059669')
         } else {
             gradient.addColorStop(0, '#1a2237')
             gradient.addColorStop(1, '#12182b')
@@ -156,7 +240,7 @@ export class TrieVisualizer {
         ctx.arc(x, y, radius, 0, 2 * Math.PI)
         ctx.fill()
 
-        ctx.strokeStyle = isEnd ? '#667eea' : 'rgba(255, 255, 255, 0.2)'
+        ctx.strokeStyle = isEnd ? '#10b981' : isSuggestion ? '#764ba2' : 'rgba(255, 255, 255, 0.2)'
         ctx.lineWidth = 2
         ctx.stroke()
 
@@ -174,23 +258,35 @@ export class TrieVisualizer {
             ctx.textBaseline = 'middle'
             ctx.fillText(label, x, y)
         }
-
-        // End marker
-        if (isEnd) {
-            ctx.fillStyle = '#10b981'
-            ctx.font = 'bold 10px Inter'
-            ctx.textAlign = 'center'
-            ctx.fillText('✓', x, y + radius + 12)
-        }
     }
 
-    drawWordList() {
+    drawSuggestionsList(words) {
         const ctx = this.ctx
         const canvas = this.canvas
 
         ctx.fillStyle = '#94a3b8'
         ctx.font = '12px Inter'
         ctx.textAlign = 'left'
-        ctx.fillText('Words: ' + this.words.join(', '), 10, canvas.height - 10)
+        const text = 'Suggestions: ' + (words.length > 0 ? words.join(', ') : 'None')
+
+        // Wrap text if too long
+        const maxWidth = canvas.width - 20
+        let line = ''
+        let y = canvas.height - 40
+        const lineHeight = 16
+
+        const wordsList = text.split(' ')
+        for (let i = 0; i < wordsList.length; i++) {
+            const testLine = line + wordsList[i] + ' '
+            const metrics = ctx.measureText(testLine)
+            if (metrics.width > maxWidth && i > 0) {
+                ctx.fillText(line, 10, y)
+                line = wordsList[i] + ' '
+                y += lineHeight
+            } else {
+                line = testLine
+            }
+        }
+        ctx.fillText(line, 10, y)
     }
 }

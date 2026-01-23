@@ -7,18 +7,36 @@ import { TrieVisualizer } from './src/js/visualizers/TrieVisualizer.js'
 import { TextEditor } from './src/js/TextEditor.js'
 import { getTextStats, getWordFrequency } from './src/js/utils.js'
 
+import { Predictor } from './src/js/Predictor.js'
+
 // App state
 let currentDS = 'stack'
 let currentVisualizer = null
 let textEditor = null
+let predictor = new Predictor()
 
 // Initialize application
 function initApp() {
     setupTextEditor()
+    loadSampleText()
     setupNavigation()
     setupSearch()
     setupCanvas()
     switchDataStructure('stack')
+}
+
+// Load some initial text to train the predictor
+function loadSampleText() {
+    fetch('/dictionary.txt')
+        .then(res => res.text())
+        .then(text => {
+            // Create some phrases? Or just rely on user typing?
+            // Let's seed with some basic English structure if possible or just rely on runtime
+            predictor.train("the quick brown fox jumps over the lazy dog")
+            predictor.train("data structures and algorithms are fun")
+            predictor.train("stack is a linear data structure")
+            predictor.train("linked list has nodes and pointers")
+        })
 }
 
 function setupTextEditor() {
@@ -27,6 +45,26 @@ function setupTextEditor() {
 
     // Update stats on text change
     textEditor.on('change', updateStats)
+
+    // Train predictor on text change
+    textEditor.on('change', (text) => {
+        predictor.train(text)
+    })
+
+    // Handle prediction requests
+    textEditor.on('predict', () => {
+        const text = textEditor.getText()
+        // Get text before cursor
+        const cursorPos = textEditor.getCursorPosition()
+        const textBefore = text.substring(0, cursorPos)
+
+        // Predict next word
+        const suggestion = predictor.predict(textBefore)
+        if (suggestion) {
+            textEditor.setSuggestion(suggestion)
+            showStatus(`Suggestion: Press Tab to accept "${suggestion}"`, 'info')
+        }
+    })
 
     // Update visualizations on text change
     textEditor.on('change', (text) => {

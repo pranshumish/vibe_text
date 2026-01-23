@@ -25,14 +25,21 @@ export class TextEditor {
         const debouncedSave = debounce(() => {
             this.saveState()
             this.emit('change', this.getText())
+            this.emit('predict', null) // Trigger prediction check
         }, 300)
 
-        this.element.addEventListener('input', () => {
+        this.element.addEventListener('input', (e) => {
+            // If typing, clear invalid suggestion unless we want to keep it?
+            // Safer to clear and re-predict
+            if (this.currentSuggestion) {
+                this.clearSuggestion()
+            }
             debouncedSave()
         })
 
         // Track cursor movements
         this.element.addEventListener('click', () => {
+            this.clearSuggestion() // Clear on move
             this.emit('cursorMove', this.getCursorPosition())
         })
 
@@ -44,6 +51,15 @@ export class TextEditor {
 
         // Keyboard shortcuts
         this.element.addEventListener('keydown', (e) => {
+            // Tab to accept suggestion
+            if (e.key === 'Tab') {
+                e.preventDefault()
+                if (this.acceptSuggestion()) {
+                    return
+                }
+                // Indent behavior? For now just prevent default to avoid focus loss
+            }
+
             // Undo: Ctrl/Cmd + Z
             if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
                 e.preventDefault()
@@ -58,7 +74,71 @@ export class TextEditor {
     }
 
     getText() {
-        return this.element.innerText || ''
+        // Return text without the suggestion ghost
+        const clone = this.element.cloneNode(true)
+        const ghosts = clone.querySelectorAll('.ghost-text')
+        ghosts.forEach(g => g.remove())
+        return clone.innerText || ''
+    }
+
+    setSuggestion(text) {
+        // Remove existing ghost
+        this.clearSuggestion()
+
+        if (!text) return
+
+        const sel = window.getSelection()
+        if (sel.rangeCount === 0) return
+
+        const range = sel.getRangeAt(0)
+
+        // Only show if cursor is at the end of a text node or the element
+        // Simplifying: append a span at the current range
+
+        const span = document.createElement('span')
+        span.className = 'ghost-text'
+        span.contentEditable = 'false'
+        span.innerText = ' ' + text // Add space?
+        span.style.color = '#94a3b8'
+        span.style.pointerEvents = 'none'
+
+        range.insertNode(span)
+
+        // Move cursor back to before the span (otherwise it jumps after)
+        // Actually, we want cursor BEFORE the ghost
+        range.setEndBefore(span)
+        range.collapse(false) // collapse to end
+
+        this.currentSuggestion = text
+    }
+
+    clearSuggestion() {
+        const ghosts = this.element.querySelectorAll('.ghost-text')
+        ghosts.forEach(g => g.remove())
+        this.currentSuggestion = null
+    }
+
+    acceptSuggestion() {
+        if (!this.currentSuggestion) return false
+
+        const ghosts = this.element.querySelectorAll('.ghost-text')
+        ghosts.forEach(g => {
+            // Convert to regular text node
+            const text = document.createTextNode(g.innerText)
+            g.parentNode.replaceChild(text, g)
+        })
+
+        // Move cursor to end
+        const sel = window.getSelection()
+        const range = document.createRange()
+        range.selectNodeContents(this.element)
+        range.collapse(false)
+        sel.removeAllRanges()
+        sel.addRange(range)
+
+        this.currentSuggestion = null
+        this.emit('change', this.getText())
+        return true
     }
 
     setText(text) {
