@@ -5,7 +5,7 @@ import { HashMapVisualizer } from './src/js/visualizers/HashMapVisualizer.js'
 import { GapBufferVisualizer } from './src/js/visualizers/GapBufferVisualizer.js'
 import { TrieVisualizer } from './src/js/visualizers/TrieVisualizer.js'
 import { TextEditor } from './src/js/TextEditor.js'
-import { getTextStats } from './src/js/utils.js'
+import { getTextStats, getWordFrequency } from './src/js/utils.js'
 
 // App state
 let currentDS = 'stack'
@@ -16,6 +16,7 @@ let textEditor = null
 function initApp() {
     setupTextEditor()
     setupNavigation()
+    setupSearch()
     setupCanvas()
     switchDataStructure('stack')
 }
@@ -65,6 +66,46 @@ function setupNavigation() {
     })
 
     document.getElementById('resetBtn').addEventListener('click', resetCurrentDS)
+}
+
+function setupSearch() {
+    const input = document.getElementById('findInput')
+    const btn = document.getElementById('findBtn')
+
+    const performSearch = () => {
+        const query = input.value.trim().toLowerCase()
+        if (!query) return
+
+        // Use HashMap for O(1) lookup
+        const text = textEditor.getText()
+        const frequencyMap = getWordFrequency(text)
+        const count = frequencyMap.get(query) || 0
+
+        if (count > 0) {
+            showStatus(`Found "${query}" ${count} time${count !== 1 ? 's' : ''}`, 'success')
+
+            // Visual feedback: try to select the word
+            // We use window.find() as a simple way to highlight the text in the browser
+            // verifying the HashMap's finding visually
+            const editor = document.getElementById('textEditor')
+            editor.focus()
+
+            // Try finding next
+            if (!window.find(query, false, false, true, false, true, false)) {
+                // Wrap around
+                const sel = window.getSelection()
+                sel.collapse(editor, 0)
+                window.find(query, false, false, true, false, true, false)
+            }
+        } else {
+            showStatus(`Word "${query}" not found`, 'error')
+        }
+    }
+
+    btn.addEventListener('click', performSearch)
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch()
+    })
 }
 
 function setupCanvas() {

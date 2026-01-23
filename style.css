@@ -166,6 +166,18 @@ body {
   gap: var(--spacing-sm);
 }
 
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.search-input {
+  width: 150px;
+  height: 36px;
+  padding: 0 var(--spacing-md) !important;
+}
+
 /* Text Editor */
 .editor-panel {
   position: relative;
