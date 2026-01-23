@@ -7,7 +7,13 @@ export class LinkedListVisualizer {
     }
 
     updateFromText(text, textEditor) {
-        this.characters = text.split('')
+        // Chunk characters into groups of 10
+        this.characters = []
+        for (let i = 0; i < text.length; i += 10) {
+            this.characters.push(text.substr(i, 10))
+        }
+        // If text is empty, still show one empty chunk or handle in draw
+
         this.cursorPosition = textEditor.getCursorPosition()
         this.draw()
     }
@@ -38,42 +44,45 @@ export class LinkedListVisualizer {
         ctx.fillStyle = '#667eea'
         ctx.font = 'bold 16px Inter'
         ctx.textAlign = 'center'
-        ctx.fillText('Character Doubly Linked List', canvas.width / 2, 25)
+        ctx.fillText('Unrolled Linked List (10 chars per node)', canvas.width / 2, 25)
+
+        // Calculate chunk index for cursor
+        const cursorChunkIndex = Math.min(Math.floor(this.cursorPosition / 10), this.characters.length - 1)
 
         ctx.fillStyle = '#94a3b8'
         ctx.font = '12px Inter'
-        ctx.fillText(`${this.characters.length} nodes | Cursor at position ${this.cursorPosition}`, canvas.width / 2, 45)
+        ctx.fillText(`${this.characters.length} nodes | Cursor in node ${cursorChunkIndex + 1}`, canvas.width / 2, 45)
 
-        const nodeWidth = 35
-        const nodeHeight = 40
-        const spacing = 15
-        const maxVisibleNodes = Math.floor((canvas.width - 40) / (nodeWidth + spacing))
+        const nodeWidth = 120 // Wider for 10 chars
+        const nodeHeight = 50
+        const spacing = 30 // More spacing for arrows
+        const maxVisibleNodes = Math.floor((canvas.width - 60) / (nodeWidth + spacing))
         const startY = canvas.height / 2 - nodeHeight / 2
 
         // Calculate which nodes to show (around cursor)
-        let startIndex = Math.max(0, this.cursorPosition - Math.floor(maxVisibleNodes / 2))
+        let startIndex = Math.max(0, cursorChunkIndex - Math.floor(maxVisibleNodes / 2))
         const endIndex = Math.min(this.characters.length, startIndex + maxVisibleNodes)
 
         if (endIndex - startIndex < maxVisibleNodes) {
             startIndex = Math.max(0, endIndex - maxVisibleNodes)
         }
 
-        const visibleChars = this.characters.slice(startIndex, endIndex)
-        const totalWidth = visibleChars.length * (nodeWidth + spacing) - spacing
+        const visibleChunks = this.characters.slice(startIndex, endIndex)
+        const totalWidth = visibleChunks.length * (nodeWidth + spacing) - spacing
         const startX = (canvas.width - totalWidth) / 2
 
-        visibleChars.forEach((char, i) => {
+        visibleChunks.forEach((chunk, i) => {
             const index = startIndex + i
             const x = startX + i * (nodeWidth + spacing)
-            const isCursor = index === this.cursorPosition
+            const isCursorNode = index === cursorChunkIndex
 
             // Node shadow
             ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
-            ctx.fillRect(x + 2, startY + 2, nodeWidth, nodeHeight)
+            ctx.fillRect(x + 4, startY + 4, nodeWidth, nodeHeight)
 
             // Node box
             const gradient = ctx.createLinearGradient(x, startY, x, startY + nodeHeight)
-            if (isCursor) {
+            if (isCursorNode) {
                 gradient.addColorStop(0, '#667eea')
                 gradient.addColorStop(1, '#764ba2')
             } else {
@@ -84,47 +93,42 @@ export class LinkedListVisualizer {
             ctx.fillRect(x, startY, nodeWidth, nodeHeight)
 
             // Node border
-            ctx.strokeStyle = isCursor ? '#667eea' : 'rgba(255, 255, 255, 0.2)'
+            ctx.strokeStyle = isCursorNode ? '#667eea' : 'rgba(255, 255, 255, 0.2)'
             ctx.lineWidth = 2
             ctx.strokeRect(x, startY, nodeWidth, nodeHeight)
 
-            // Character (handle newlines and spaces)
-            const displayChar = char === '\n' ? '↵' : char === ' ' ? '·' : char
+            // Content
+            const displayChunk = chunk.replace(/\n/g, '↵').replace(/ /g, '·')
+            // Truncate if too long to fit visually (though 10 chars should fit)
+
             ctx.fillStyle = '#e2e8f0'
-            ctx.font = 'bold 16px monospace'
+            ctx.font = '14px monospace'
             ctx.textAlign = 'center'
             ctx.textBaseline = 'middle'
-            ctx.fillText(displayChar, x + nodeWidth / 2, startY + nodeHeight / 2)
+            ctx.fillText(displayChunk, x + nodeWidth / 2, startY + nodeHeight / 2)
+
+            // Length indicator
+            ctx.fillStyle = 'rgba(255,255,255,0.5)'
+            ctx.font = '10px Inter'
+            ctx.fillText(`len: ${chunk.length}`, x + nodeWidth - 25, startY + nodeHeight - 5)
 
             // Head/Tail markers
             if (index === 0) {
                 ctx.fillStyle = '#10b981'
                 ctx.font = 'bold 10px Inter'
+                ctx.textAlign = 'center'
                 ctx.fillText('HEAD', x + nodeWidth / 2, startY - 12)
             }
             if (index === this.characters.length - 1) {
                 ctx.fillStyle = '#f59e0b'
                 ctx.font = 'bold 10px Inter'
+                ctx.textAlign = 'center'
                 ctx.fillText('TAIL', x + nodeWidth / 2, startY + nodeHeight + 15)
             }
 
-            // Cursor marker
-            if (isCursor) {
-                ctx.fillStyle = '#667eea'
-                ctx.font = 'bold 10px Inter'
-                ctx.fillText('CURSOR', x + nodeWidth / 2, startY + nodeHeight + 28)
-            }
-
             // Forward/backward arrows
-            if (i < visibleChars.length - 1) {
-                ctx.strokeStyle = '#667eea'
-                ctx.fillStyle = '#667eea'
-                ctx.lineWidth = 1.5
-                this.drawArrow(x + nodeWidth, startY + 10, x + nodeWidth + spacing, startY + 10)
-
-                ctx.strokeStyle = '#764ba2'
-                ctx.fillStyle = '#764ba2'
-                this.drawArrow(x + nodeWidth + spacing, startY + 30, x + nodeWidth, startY + 30)
+            if (i < visibleChunks.length - 1) {
+                this.drawDoubleArrow(x + nodeWidth, startY + nodeHeight / 2, x + nodeWidth + spacing, startY + nodeHeight / 2)
             }
         })
 
@@ -132,13 +136,48 @@ export class LinkedListVisualizer {
         if (startIndex > 0) {
             ctx.fillStyle = '#94a3b8'
             ctx.font = '20px Inter'
+            ctx.textAlign = 'right'
             ctx.fillText('...', startX - 20, startY + nodeHeight / 2)
         }
         if (endIndex < this.characters.length) {
             ctx.fillStyle = '#94a3b8'
             ctx.font = '20px Inter'
+            ctx.textAlign = 'left'
             ctx.fillText('...', startX + totalWidth + 20, startY + nodeHeight / 2)
         }
+    }
+
+    drawDoubleArrow(startX, startY, endX, endY) {
+        const ctx = this.ctx
+        const arrowLength = 5
+
+        // Forward line (top)
+        ctx.beginPath()
+        ctx.strokeStyle = '#667eea'
+        ctx.moveTo(startX, startY - 5)
+        ctx.lineTo(endX, endY - 5)
+        ctx.stroke()
+
+        // Forward arrow head
+        ctx.beginPath()
+        ctx.moveTo(endX, endY - 5)
+        ctx.lineTo(endX - arrowLength, endY - 9)
+        ctx.lineTo(endX - arrowLength, endY - 1)
+        ctx.fill()
+
+        // Backward line (bottom)
+        ctx.beginPath()
+        ctx.strokeStyle = '#764ba2'
+        ctx.moveTo(endX, endY + 5)
+        ctx.lineTo(startX, endY + 5)
+        ctx.stroke()
+
+        // Backward arrow head
+        ctx.beginPath()
+        ctx.moveTo(startX, endY + 5)
+        ctx.lineTo(startX + arrowLength, endY + 1)
+        ctx.lineTo(startX + arrowLength, endY + 9)
+        ctx.fill()
     }
 
     drawArrow(fromX, fromY, toX, toY, color) {
