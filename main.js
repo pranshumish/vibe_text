@@ -5,6 +5,7 @@ import { HashMapVisualizer } from './src/js/visualizers/HashMapVisualizer.js'
 import { GapBufferVisualizer } from './src/js/visualizers/GapBufferVisualizer.js'
 import { TrieVisualizer } from './src/js/visualizers/TrieVisualizer.js'
 import { GraphVisualizer } from './src/js/visualizers/GraphVisualizer.js'
+import { HuffmanVisualizer } from './src/js/visualizers/HuffmanVisualizer.js'
 import { TextEditor } from './src/js/TextEditor.js'
 import { getTextStats, getWordFrequency } from './src/js/utils.js'
 
@@ -180,7 +181,8 @@ function switchDataStructure(ds) {
         linkedlist: 'Character Sequence',
         hashmap: 'Word Frequency',
         trie: 'Autocomplete Trie',
-        graph: 'Full Text Trie (Trie-2)'
+        graph: 'Full Text Trie (Trie-2)',
+        huffman: 'Huffman Coding Tree'
     }
     document.getElementById('vizTitle').textContent = titles[ds]
 
@@ -233,6 +235,14 @@ function updateControls(ds) {
         <label>Gap Buffer Settings</label>
         <div class="control-row">
           <label style="margin: 0"><input type="checkbox" id="showGapDetails" checked /> Show gap details</label>
+        </div>
+      </div>
+    `,
+        huffman: `
+      <div class="control-group">
+        <label>Compression Info</label>
+        <div class="control-row">
+            <span style="font-size: 12px; color: #94a3b8;">Tree built from character frequency</span>
         </div>
       </div>
     `
@@ -288,6 +298,9 @@ function initializeVisualizer(ds) {
             break
         case 'graph':
             currentVisualizer = new GraphVisualizer(canvas, ctx)
+            break
+        case 'huffman':
+            currentVisualizer = new HuffmanVisualizer(canvas, ctx)
             break
     }
 
