@@ -27,8 +27,9 @@ export class TextEditor {
         const debouncedSave = debounce(() => {
             this.saveState()
             this.emit('change', this.getText())
+            this.emit('change', this.getText())
             this.emit('predict', null) // Trigger prediction check
-        }, 300)
+        }, 1000) // Increase debounce to 1s to avoid breaking words mid-typing for slow typers
 
         this.element.addEventListener('input', (e) => {
             // If typing, clear invalid suggestion unless we want to keep it?
@@ -36,7 +37,16 @@ export class TextEditor {
             if (this.currentSuggestion) {
                 this.clearSuggestion()
             }
-            debouncedSave()
+
+            // Check for word boundaries (space or newline) to save state immediately
+            // inputType can help discriminate, but checking the last char is also viable
+            // However, input event fires AFTER change, so we can check e.data
+            if (e.data === ' ' || e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak') {
+                this.saveState()
+                debouncedSave.cancel() // Cancel pending debounce since we just saved
+            } else {
+                debouncedSave()
+            }
         })
 
         // Track cursor movements
@@ -185,6 +195,12 @@ export class TextEditor {
     }
 
     undo() {
+        // Ensure pending changes are saved before undoing
+        const currentText = this.getText()
+        if (this.undoStack.length === 0 || (this.undoStack.length > 0 && this.undoStack[this.undoStack.length - 1] !== currentText)) {
+            this.saveState()
+        }
+
         if (this.undoStack.length <= 1) return // Keep at least one state
 
         const currentState = this.undoStack.pop()
@@ -198,6 +214,14 @@ export class TextEditor {
     }
 
     redo() {
+        // If we have unsaved changes, that counts as a new branch of history
+        // triggering saveState which (correctly) clears the redo stack.
+        const currentText = this.getText()
+        if (this.undoStack.length > 0 && this.undoStack[this.undoStack.length - 1] !== currentText) {
+            this.saveState()
+            return // Redo stack is now empty
+        }
+
         if (this.redoStack.length === 0) return
 
         const nextState = this.redoStack.pop()

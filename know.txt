@@ -1,7 +1,7 @@
 # Project Knowledge: DSA Text Editor & Visualizer
 
 ## Overview
-This project is a web-based text editor that features real-time data structure visualizations. It is designed to help users understand how various data structures work by visualizing their behavior as the user interacts with the text editor.
+This project is a web-based text editor with real-time data structure visualizations. It is designed to help users understand how various data structures work by visualizing their behavior as the user interacts with the text editor.
 
 ## Technologies Used
 - **Frontend:** JavaScript (ES6 modules), HTML, CSS

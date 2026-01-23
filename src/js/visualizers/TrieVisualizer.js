@@ -5,6 +5,7 @@ export class TrieVisualizer {
         this.root = { children: {}, isEnd: false }
         this.words = []
         this.dictionaryLoaded = false
+        this.error = null
         this.loadDictionary()
     }
 
@@ -21,6 +22,8 @@ export class TrieVisualizer {
             this.draw()
         } catch (e) {
             console.error('Failed to load dictionary:', e)
+            this.error = `Failed to load dictionary: ${e.message}`
+            this.draw()
         }
     }
 
@@ -93,6 +96,15 @@ export class TrieVisualizer {
         const canvas = this.canvas
 
         ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+        if (this.error) {
+            ctx.fillStyle = '#ef4444'
+            ctx.font = '16px Inter'
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(this.error, canvas.width / 2, canvas.height / 2)
+            return
+        }
 
         if (!this.dictionaryLoaded) {
             ctx.fillStyle = '#94a3b8'
