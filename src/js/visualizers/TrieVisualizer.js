@@ -35,8 +35,26 @@ export class TrieVisualizer {
         node.isEnd = true
     }
 
+    search(word) {
+        let node = this.root
+        for (const char of word) {
+            if (!node.children[char]) return false
+            node = node.children[char]
+        }
+        return node.isEnd
+    }
+
     updateFromText(text, textEditor) {
         if (!this.dictionaryLoaded) return
+
+        // Learn new words from text
+        const words = text.match(/\b[a-zA-Z]+\b/gi) || []
+        words.forEach(w => {
+            const word = w.toLowerCase()
+            if (!this.search(word)) {
+                this.insert(word)
+            }
+        })
 
         // Get the word currently being typed (prefix)
         const cursorPosition = textEditor.getCursorPosition()
