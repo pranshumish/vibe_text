@@ -71,6 +71,14 @@ function setupTextEditor() {
     textEditor.on('change', (text) => {
         if (currentVisualizer && currentVisualizer.updateFromText) {
             currentVisualizer.updateFromText(text, textEditor)
+
+            // If in Trie mode, try to get autocomplete suggestion
+            if (currentDS === 'trie' && currentVisualizer.getBestSuggestion) {
+                const completion = currentVisualizer.getBestSuggestion()
+                if (completion) {
+                    textEditor.setSuggestion(completion, true) // true = isCompletion (no space)
+                }
+            }
         }
     })
 

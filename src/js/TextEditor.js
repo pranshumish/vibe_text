@@ -13,11 +13,13 @@ export class TextEditor {
             'change': [],
             'undo': [],
             'redo': [],
-            'cursorMove': []
+            'cursorMove': [],
+            'predict': []
         }
 
         this.setupEventListeners()
         this.saveState() // Initial state
+        this.currentSuggestion = null
     }
 
     setupEventListeners() {
@@ -81,7 +83,7 @@ export class TextEditor {
         return clone.innerText || ''
     }
 
-    setSuggestion(text) {
+    setSuggestion(text, isCompletion = false) {
         // Remove existing ghost
         this.clearSuggestion()
 
@@ -98,7 +100,7 @@ export class TextEditor {
         const span = document.createElement('span')
         span.className = 'ghost-text'
         span.contentEditable = 'false'
-        span.innerText = ' ' + text // Add space?
+        span.innerText = isCompletion ? text : ' ' + text
         span.style.color = '#94a3b8'
         span.style.pointerEvents = 'none'
 

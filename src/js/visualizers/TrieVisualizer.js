@@ -47,15 +47,6 @@ export class TrieVisualizer {
     updateFromText(text, textEditor) {
         if (!this.dictionaryLoaded) return
 
-        // Learn new words from text
-        const words = text.match(/\b[a-zA-Z]+\b/gi) || []
-        words.forEach(w => {
-            const word = w.toLowerCase()
-            if (!this.search(word)) {
-                this.insert(word)
-            }
-        })
-
         // Get the word currently being typed (prefix)
         const cursorPosition = textEditor.getCursorPosition()
         const textBeforeCursor = text.substring(0, cursorPosition)
@@ -63,6 +54,32 @@ export class TrieVisualizer {
 
         this.currentPrefix = match ? match[0].toLowerCase() : ''
         this.draw()
+    }
+
+    getBestSuggestion() {
+        if (!this.currentPrefix) return null
+
+        // Find the node corresponding to the prefix
+        let prefixNode = this.root
+        for (const char of this.currentPrefix) {
+            if (prefixNode.children[char]) {
+                prefixNode = prefixNode.children[char]
+            } else {
+                return null
+            }
+        }
+
+        // Collect completions
+        const completions = []
+        this.collectWords(prefixNode, this.currentPrefix, completions, 1) // Just get 1
+
+        if (completions.length > 0) {
+            // Return completion suffix (full word - prefix)
+            // But wait, collectWords returns full words.
+            // If prefix is "app", completion is "apple". Suffix is "le".
+            return completions[0].substring(this.currentPrefix.length)
+        }
+        return null
     }
 
     reset() {
