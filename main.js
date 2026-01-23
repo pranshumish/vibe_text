@@ -4,6 +4,7 @@ import { LinkedListVisualizer } from './src/js/visualizers/LinkedListVisualizer.
 import { HashMapVisualizer } from './src/js/visualizers/HashMapVisualizer.js'
 import { GapBufferVisualizer } from './src/js/visualizers/GapBufferVisualizer.js'
 import { TrieVisualizer } from './src/js/visualizers/TrieVisualizer.js'
+import { GraphVisualizer } from './src/js/visualizers/GraphVisualizer.js'
 import { TextEditor } from './src/js/TextEditor.js'
 import { getTextStats, getWordFrequency } from './src/js/utils.js'
 
@@ -171,7 +172,7 @@ function switchDataStructure(ds) {
         linkedlist: 'Character Sequence',
         hashmap: 'Word Frequency',
         trie: 'Autocomplete Trie',
-        gapbuffer: 'Gap Buffer'
+        graph: 'Full Text Trie (Trie-2)'
     }
     document.getElementById('vizTitle').textContent = titles[ds]
 
@@ -277,8 +278,8 @@ function initializeVisualizer(ds) {
         case 'trie':
             currentVisualizer = new TrieVisualizer(canvas, ctx)
             break
-        case 'gapbuffer':
-            currentVisualizer = new GapBufferVisualizer(canvas, ctx)
+        case 'graph':
+            currentVisualizer = new GraphVisualizer(canvas, ctx)
             break
     }
 

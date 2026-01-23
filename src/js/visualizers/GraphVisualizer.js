@@ -1,65 +1,42 @@
-import { getWordPairs } from '../utils.js'
-
 export class GraphVisualizer {
     constructor(canvas, ctx) {
         this.canvas = canvas
         this.ctx = ctx
-        this.vertices = new Map() // word -> {x, y, connections}
-        this.edges = new Map() // "word1->word2" -> weight
-        this.showWeights = true
+        this.root = { children: {}, isEnd: false }
+        this.words = []
     }
 
     updateFromText(text, textEditor) {
-        // Build graph from word pairs
-        this.vertices = new Map()
-        this.edges = new Map()
+        // Rebuild trie from all words in text
+        this.root = { children: {}, isEnd: false }
+        this.words = []
 
-        const pairs = getWordPairs(text)
+        const words = text.match(/\b[a-zA-Z]+\b/gi) || []
+        const uniqueWords = [...new Set(words.map(w => w.toLowerCase()))]
 
-        // Count word adjacencies
-        pairs.forEach(([word1, word2]) => {
-            const edgeKey = `${word1}->${word2}`
-            this.edges.set(edgeKey, (this.edges.get(edgeKey) || 0) + 1)
-
-            if (!this.vertices.has(word1)) {
-                this.vertices.set(word1, { connections: 0 })
-            }
-            if (!this.vertices.has(word2)) {
-                this.vertices.set(word2, { connections: 0 })
-            }
-
-            this.vertices.get(word1).connections++
-            this.vertices.get(word2).connections++
+        uniqueWords.forEach(word => {
+            this.insert(word)
         })
-
-        // Layout vertices in circle
-        this.layoutVertices()
         this.draw()
     }
 
-    setShowWeights(show) {
-        this.showWeights = show
-        this.draw()
-    }
-
-    layoutVertices() {
-        const centerX = this.canvas.width / 2
-        const centerY = this.canvas.height / 2
-        const radius = Math.min(centerX, centerY) - 60
-
-        const words = Array.from(this.vertices.keys())
-        words.forEach((word, i) => {
-            const angle = (i / words.length) * 2 * Math.PI - Math.PI / 2
-            const vertex = this.vertices.get(word)
-            vertex.x = centerX + radius * Math.cos(angle)
-            vertex.y = centerY + radius * Math.sin(angle)
-            vertex.word = word
-        })
+    insert(word) {
+        let node = this.root
+        for (const char of word) {
+            if (!node.children[char]) {
+                node.children[char] = { children: {}, isEnd: false, char }
+            }
+            node = node.children[char]
+        }
+        node.isEnd = true
+        if (!this.words.includes(word)) {
+            this.words.push(word)
+        }
     }
 
     reset() {
-        this.vertices = new Map()
-        this.edges = new Map()
+        this.root = { children: {}, isEnd: false }
+        this.words = []
         this.draw()
     }
 
@@ -69,122 +46,130 @@ export class GraphVisualizer {
 
         ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-        if (this.vertices.size === 0) {
+        if (this.words.length === 0) {
             ctx.fillStyle = '#94a3b8'
             ctx.font = '16px Inter'
             ctx.textAlign = 'center'
             ctx.textBaseline = 'middle'
-            ctx.fillText('No word connections yet', canvas.width / 2, canvas.height / 2)
+            ctx.fillText('No words in text editor', canvas.width / 2, canvas.height / 2)
             return
         }
 
-        // Draw title
+        // Calculate tree layout
+        const startY = 60
+        const centerX = canvas.width / 2
+
+        // Draw info
         ctx.fillStyle = '#667eea'
         ctx.font = 'bold 16px Inter'
         ctx.textAlign = 'center'
-        ctx.fillText('Word Relationship Graph', canvas.width / 2, 25)
+        ctx.fillText('Full Text Trie (All Words)', canvas.width / 2, 25)
 
         ctx.fillStyle = '#94a3b8'
         ctx.font = '12px Inter'
-        ctx.fillText(`${this.vertices.size} words, ${this.edges.size} connections`, canvas.width / 2, 45)
+        ctx.fillText(`${this.words.length} unique words`, canvas.width / 2, 45)
 
-        // Draw edges first
-        this.edges.forEach((weight, edgeKey) => {
-            const [word1, word2] = edgeKey.split('->')
-            const v1 = this.vertices.get(word1)
-            const v2 = this.vertices.get(word2)
 
-            if (v1 && v2) {
-                this.drawEdge(v1, v2, weight)
+        // Draw root
+        this.drawNode(centerX, startY, 'ROOT', false, true)
+
+        // Draw tree recursively
+        this.drawTree(this.root, centerX, startY, canvas.width - 40, 1)
+    }
+
+    drawTree(node, x, y, spread, level) {
+        const ctx = this.ctx
+        const children = Object.values(node.children).sort((a, b) => a.char.localeCompare(b.char))
+
+        if (children.length === 0) return
+
+        const levelHeight = 60
+        const childY = y + levelHeight
+
+        // Adjust spread based on level to prevent overlap at deep levels
+        const activeSpread = Math.max(spread, children.length * 30)
+
+        const childSpread = activeSpread / children.length
+        const startX = x - (activeSpread / 2) + (childSpread / 2)
+
+        children.forEach((child, index) => {
+            const childX = startX + index * childSpread
+
+            // Draw line to child
+            ctx.strokeStyle = 'rgba(102, 126, 234, 0.4)'
+            ctx.lineWidth = 2
+            ctx.beginPath()
+            ctx.moveTo(x, y + 15)
+            ctx.lineTo(childX, childY - 15)
+            ctx.stroke()
+
+            // Draw edge label (character)
+            const midX = (x + childX) / 2
+            const midY = (y + childY) / 2
+            ctx.fillStyle = '#667eea'
+            ctx.font = 'bold 12px Inter'
+            ctx.textAlign = 'center'
+            ctx.fillText(child.char, midX, midY - 5)
+
+            // Draw child node
+            this.drawNode(childX, childY, child.char, child.isEnd)
+
+            // Recursively draw children
+            if (level < 6) { // Limit depth for visualization
+                this.drawTree(child, childX, childY, childSpread * 0.8, level + 1)
             }
         })
-
-        // Draw vertices
-        this.vertices.forEach((vertex) => {
-            this.drawVertex(vertex)
-        })
     }
 
-    drawEdge(v1, v2, weight) {
+    drawNode(x, y, label, isEnd, isRoot = false) {
         const ctx = this.ctx
+        const radius = isRoot ? 20 : 15
 
-        const dx = v2.x - v1.x
-        const dy = v2.y - v1.y
-        const length = Math.sqrt(dx * dx + dy * dy)
-        const radius = 25
-
-        const offsetX = (dx / length) * radius
-        const offsetY = (dy / length) * radius
-
-        const startX = v1.x + offsetX
-        const startY = v1.y + offsetY
-        const endX = v2.x - offsetX
-        const endY = v2.y - offsetY
-
-        const thickness = Math.min(1 + weight * 0.5, 5)
-
-        ctx.strokeStyle = `rgba(102, 126, 234, ${Math.min(0.3 + weight * 0.1, 0.8)})`
-        ctx.lineWidth = thickness
-        ctx.beginPath()
-        ctx.moveTo(startX, startY)
-        ctx.lineTo(endX, endY)
-        ctx.stroke()
-
-        if (this.showWeights && weight > 1) {
-            const midX = (startX + endX) / 2
-            const midY = (startY + endY) / 2
-
-            ctx.fillStyle = '#667eea'
-            ctx.font = 'bold 10px Inter'
-            ctx.textAlign = 'center'
-            ctx.fillText(weight, midX, midY - 5)
-        }
-
-        const angle = Math.atan2(dy, dx)
-        const headLength = 8
-
-        ctx.fillStyle = 'rgba(102, 126, 234, 0.6)'
-        ctx.beginPath()
-        ctx.moveTo(endX, endY)
-        ctx.lineTo(
-            endX - headLength * Math.cos(angle - Math.PI / 6),
-            endY - headLength * Math.sin(angle - Math.PI / 6)
-        )
-        ctx.lineTo(
-            endX - headLength * Math.cos(angle + Math.PI / 6),
-            endY - headLength * Math.sin(angle + Math.PI / 6)
-        )
-        ctx.closePath()
-        ctx.fill()
-    }
-
-    drawVertex(vertex) {
-        const ctx = this.ctx
-        const radius = 25
-
+        // Shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
         ctx.beginPath()
-        ctx.arc(vertex.x + 2, vertex.y + 2, radius, 0, 2 * Math.PI)
+        ctx.arc(x + 2, y + 2, radius, 0, 2 * Math.PI)
         ctx.fill()
 
-        const gradient = ctx.createRadialGradient(vertex.x, vertex.y, 0, vertex.x, vertex.y, radius)
-        gradient.addColorStop(0, '#1a2237')
-        gradient.addColorStop(1, '#12182b')
+        // Node circle
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius)
+        if (isEnd) {
+            gradient.addColorStop(0, '#667eea')
+            gradient.addColorStop(1, '#764ba2')
+        } else {
+            gradient.addColorStop(0, '#1a2237')
+            gradient.addColorStop(1, '#12182b')
+        }
         ctx.fillStyle = gradient
         ctx.beginPath()
-        ctx.arc(vertex.x, vertex.y, radius, 0, 2 * Math.PI)
+        ctx.arc(x, y, radius, 0, 2 * Math.PI)
         ctx.fill()
 
-        ctx.strokeStyle = 'rgba(102, 126, 234, 0.5)'
+        ctx.strokeStyle = isEnd ? '#667eea' : 'rgba(255, 255, 255, 0.2)'
         ctx.lineWidth = 2
         ctx.stroke()
 
-        ctx.fillStyle = '#e2e8f0'
-        ctx.font = 'bold 11px Inter'
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
+        // Label
+        if (!isRoot) {
+            ctx.fillStyle = '#e2e8f0'
+            ctx.font = 'bold 12px Inter'
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(label, x, y)
+        } else {
+            ctx.fillStyle = '#94a3b8'
+            ctx.font = 'bold 10px Inter'
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(label, x, y)
+        }
 
-        const word = vertex.word.length > 8 ? vertex.word.substring(0, 7) + '...' : vertex.word
-        ctx.fillText(word, vertex.x, vertex.y)
+        // End marker
+        if (isEnd) {
+            ctx.fillStyle = '#10b981'
+            ctx.font = 'bold 10px Inter'
+            ctx.textAlign = 'center'
+            ctx.fillText('✓', x, y + radius + 12)
+        }
     }
 }
