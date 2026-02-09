@@ -5,6 +5,8 @@ import { HashMapVisualizer } from './src/js/visualizers/HashMapVisualizer.js'
 import { TrieVisualizer } from './src/js/visualizers/TrieVisualizer.js'
 import { HuffmanVisualizer } from './src/js/visualizers/HuffmanVisualizer.js'
 import { BKTreeVisualizer } from './src/js/visualizers/BKTreeVisualizer.js'
+import { TreeVisualizer } from './src/js/visualizers/TreeVisualizer.js'
+import { BracketVisualizer } from './src/js/visualizers/BracketVisualizer.js'
 import { TextEditor } from './src/js/TextEditor.js'
 import { getTextStats, getWordFrequency } from './src/js/utils.js'
 
@@ -174,6 +176,26 @@ function setupTextEditor() {
         const rect = document.getElementById('visualizationCanvas').getBoundingClientRect()
         particleSystem.spawn(rect.left + rect.width / 2, rect.top + rect.height / 2, '#10b981', 20)
     })
+
+    // History update for version tree
+    textEditor.on('historyUpdate', (history) => {
+        if (currentDS === 'versiontree' && currentVisualizer) {
+            currentVisualizer.updateFromHistory(history)
+        }
+    })
+
+    // Redo child selector
+    textEditor.on('showRedoSelector', (children) => {
+        showRedoChildSelector(children)
+    })
+
+    // Listen for version jumps from TreeVisualizer
+    const canvas = document.getElementById('visualizationCanvas')
+    canvas.addEventListener('version-jump', (e) => {
+        textEditor.setText(e.detail.content)
+        textEditor.emit('change', e.detail.content)
+        showStatus(`Jumped to version ${e.detail.id}`, 'success')
+    })
 }
 
 function updateStats() {
@@ -265,7 +287,9 @@ function switchDataStructure(ds) {
         hashmap: 'Word Frequency',
         trie: 'Autocomplete Trie',
         huffman: 'Huffman Coding Tree',
-        spellcheck: 'BK-Tree Spell Checker'
+        spellcheck: 'BK-Tree Spell Checker',
+        versiontree: 'Version History Tree (DAG)',
+        brackets: 'Bracket Matching'
     }
     document.getElementById('vizTitle').textContent = titles[ds]
 
@@ -337,6 +361,29 @@ function updateControls(ds) {
           <span id="toleranceValue" style="margin-left: 8px; color: var(--accent-primary);">2</span>
         </div>
         <p class="control-hint" style="font-size: 12px; color: #94a3b8; margin-top: 8px;">Type misspelled words to see spell check suggestions</p>
+      </div>
+    `,
+        versiontree: `
+      <div class="control-group">
+        <label>Version Navigation</label>
+        <div class="control-row">
+            <button class="btn-primary" onclick="window.editorUndo()">⟲ Undo (Ctrl+Z)</button>
+            <button class="btn-primary" onclick="window.editorRedo()">⟳ Redo (Ctrl+Y)</button>
+        </div>
+        <div class="control-row">
+            <button class="btn-primary" onclick="window.selectRedoChild()">Select Branch (Ctrl+Q)</button>
+        </div>
+        <div style="font-size: 12px; color: #94a3b8; margin-top: 8px;">
+            Click nodes to jump to versions
+        </div>
+      </div>
+    `,
+        brackets: `
+      <div class="control-group">
+        <label>Bracket Navigation</label>
+        <div class="control-row">
+            <button class="btn-primary" onclick="window.goToMatchingBracket()">Go to Matching (Ctrl+B)</button>
+        </div>
       </div>
     `
     }
@@ -410,6 +457,15 @@ function initializeVisualizer(ds) {
         case 'spellcheck':
             currentVisualizer = new BKTreeVisualizer(canvas, ctx)
             break
+        case 'versiontree':
+            currentVisualizer = new TreeVisualizer(canvas, ctx)
+            if (textEditor && textEditor.history) {
+                currentVisualizer.updateFromHistory(textEditor.history)
+            }
+            break
+        case 'brackets':
+            currentVisualizer = new BracketVisualizer(canvas, ctx)
+            break
     }
 
     currentVisualizer.draw()
@@ -446,6 +502,31 @@ window.editorRedo = () => {
     if (textEditor) {
         textEditor.redo()
         showStatus('Redo', 'success')
+    }
+}
+
+window.selectRedoChild = () => {
+    if (textEditor) {
+        textEditor.showRedoChildSelector()
+    }
+}
+
+window.goToMatchingBracket = () => {
+    if (textEditor) {
+        textEditor.goToMatchingBracket()
+    }
+}
+
+function showRedoChildSelector(children) {
+    // Create a simple modal to select which branch to redo
+    const message = children.map((child, i) =>
+        `${i + 1}. ${child.content.substring(0, 50)}...`
+    ).join('\n')
+
+    const choice = prompt(`Multiple redo branches available:\n${message}\n\nEnter number (1-${children.length}):`, '1')
+    if (choice) {
+        const index = parseInt(choice) - 1
+        textEditor.selectRedoChild(index)
     }
 }
 
