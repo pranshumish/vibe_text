@@ -14,7 +14,8 @@ export class TextEditor {
             'undo': [],
             'redo': [],
             'cursorMove': [],
-            'predict': []
+            'predict': [],
+            'type': []
         }
 
         this.setupEventListeners()
@@ -32,6 +33,8 @@ export class TextEditor {
         }, 1000) // Increase debounce to 1s to avoid breaking words mid-typing for slow typers
 
         this.element.addEventListener('input', (e) => {
+            this.emit('type') // Emit typing event for audio
+
             // If typing, clear invalid suggestion unless we want to keep it?
             // Safer to clear and re-predict
             if (this.currentSuggestion) {

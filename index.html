@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Data Structures Visualizer</title>
+  <title>VibeText</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -14,6 +14,7 @@
 
 <body>
   <div id="app">
+    <canvas id="particleCanvas" style="position: fixed; top: 0; left: 0; pointer-events: none; z-index: 9999;"></canvas>
     <!-- Navigation -->
     <nav class="navbar">
       <div class="nav-brand">
@@ -25,7 +26,7 @@
           <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"
             stroke-linejoin="round" />
         </svg>
-        <h1>DS Visualizer</h1>
+        <h1>VibeText</h1>
       </div>
       <div class="nav-tabs">
         <button class="nav-tab active" data-ds="stack">Stack</button>
@@ -89,6 +90,7 @@
           <h2 id="vizTitle">Stack Visualization</h2>
           <button id="resetBtn" class="btn-secondary">Reset</button>
         </div>
+        <div id="complexityDashboard"></div>
 
         <!-- Controls -->
         <div id="controls" class="controls">

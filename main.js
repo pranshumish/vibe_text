@@ -10,15 +10,32 @@ import { TextEditor } from './src/js/TextEditor.js'
 import { getTextStats, getWordFrequency } from './src/js/utils.js'
 
 import { Predictor } from './src/js/Predictor.js'
+import { AudioSystem } from './src/js/AudioSystem.js'
+import { ParticleSystem } from './src/js/ParticleSystem.js'
+import { ComplexityViewer } from './src/js/ComplexityViewer.js'
+import { wasmLoader } from './src/js/WasmLoader.js'
 
 // App state
 let currentDS = 'stack'
 let currentVisualizer = null
 let textEditor = null
 let predictor = new Predictor()
+let audioSystem = new AudioSystem()
+let particleSystem = null
+let complexityViewer = null
 
 // Initialize application
-function initApp() {
+async function initApp() {
+    // Load WASM modules first
+    try {
+        console.log('🚀 Initializing VibeText with C backend...');
+        await wasmLoader.loadAll();
+        console.log('✓ C backend ready');
+    } catch (error) {
+        console.error('Failed to load WASM modules:', error);
+        console.warn('Falling back to JavaScript implementation');
+    }
+
     setupTextEditor()
     loadSampleText()
     setupNavigation()
@@ -127,8 +144,48 @@ function setupTextEditor() {
         fileInput.value = '' // Reset so same file can be selected again
     })
 
+    // Particle System
+    const particleCanvas = document.getElementById('particleCanvas')
+    particleSystem = new ParticleSystem(particleCanvas)
+
+    // Complexity Viewer
+    complexityViewer = new ComplexityViewer('complexityDashboard')
+    complexityViewer.render()
+
     // Set placeholder text for demo
     editorElement.focus()
+
+    // Audio integration
+    textEditor.on('type', () => {
+        audioSystem.playTypeSound()
+
+        // Complexity Update
+        updateComplexity('insert')
+
+        // Spawn particles at cursor
+        const selection = window.getSelection()
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0)
+            const rect = range.getBoundingClientRect()
+            particleSystem.spawn(rect.left, rect.top + rect.height / 2, '#60a5fa', 3)
+        }
+    })
+
+    // Undo/Redo particles
+    textEditor.on('undo', () => {
+        audioSystem.playPopSound()
+        updateComplexity('undo')
+        // Spawn a burst in center
+        const rect = document.getElementById('visualizationCanvas').getBoundingClientRect()
+        particleSystem.spawn(rect.left + rect.width / 2, rect.top + rect.height / 2, '#ef4444', 20)
+    })
+
+    textEditor.on('redo', () => {
+        audioSystem.playPushSound()
+        updateComplexity('redo')
+        const rect = document.getElementById('visualizationCanvas').getBoundingClientRect()
+        particleSystem.spawn(rect.left + rect.width / 2, rect.top + rect.height / 2, '#10b981', 20)
+    })
 }
 
 function updateStats() {
@@ -169,6 +226,7 @@ function setupSearch() {
 
         if (count > 0) {
             showStatus(`Found "${query}" ${count} time${count !== 1 ? 's' : ''}`, 'success')
+            updateComplexity('search')
 
             // Visual feedback: try to select the word
             // We use window.find() as a simple way to highlight the text in the browser
@@ -361,6 +419,61 @@ function resetCurrentDS() {
         currentVisualizer.reset()
         showStatus('Reset complete', 'success')
     }
+}
+
+function updateComplexity(action) {
+    if (!complexityViewer) return
+
+    let complexity = 'O(1)'
+    let operation = 'Operation'
+    let description = 'Constant time operation'
+
+    // Stack
+    if (currentDS === 'stack') {
+        if (action === 'insert' || action === 'redo') {
+            complexity = 'O(1)'
+            operation = 'Push'
+            description = 'Adding to top of stack'
+        } else if (action === 'undo') {
+            complexity = 'O(1)'
+            operation = 'Pop'
+            description = 'Removing from top of stack'
+        }
+    }
+    // Linked List
+    else if (currentDS === 'linkedlist') {
+        if (action === 'insert') {
+            complexity = 'O(1)'
+            operation = 'Append'
+            description = 'Adding to end (with tail pointer)'
+        } else if (action === 'search') {
+            complexity = 'O(n)'
+            operation = 'Traversal'
+            description = 'Linear search through nodes'
+        }
+    }
+    // Hash Map
+    else if (currentDS === 'hashmap') {
+        if (action === 'insert') {
+            complexity = 'O(1)' // Amortized
+            operation = 'Insert'
+            description = 'Hashing key to index'
+        } else if (action === 'search') {
+            complexity = 'O(1)'
+            operation = 'Lookup'
+            description = 'Direct access via hash'
+        }
+    }
+    // Trie
+    else if (currentDS === 'trie') {
+        if (action === 'insert' || action === 'search') {
+            complexity = 'O(k)'
+            operation = action === 'insert' ? 'Insert' : 'Search'
+            description = 'Proportional to word length (k)'
+        }
+    }
+
+    complexityViewer.update(complexity, operation, description)
 }
 
 // Text Editor operations
