@@ -2,17 +2,15 @@
 import { StackVisualizer } from './src/js/visualizers/StackVisualizer.js'
 import { LinkedListVisualizer } from './src/js/visualizers/LinkedListVisualizer.js'
 import { HashMapVisualizer } from './src/js/visualizers/HashMapVisualizer.js'
-import { GapBufferVisualizer } from './src/js/visualizers/GapBufferVisualizer.js'
 import { TrieVisualizer } from './src/js/visualizers/TrieVisualizer.js'
-import { GraphVisualizer } from './src/js/visualizers/GraphVisualizer.js'
 import { HuffmanVisualizer } from './src/js/visualizers/HuffmanVisualizer.js'
+import { BKTreeVisualizer } from './src/js/visualizers/BKTreeVisualizer.js'
 import { TextEditor } from './src/js/TextEditor.js'
 import { getTextStats, getWordFrequency } from './src/js/utils.js'
 
 import { Predictor } from './src/js/Predictor.js'
 import { AudioSystem } from './src/js/AudioSystem.js'
 import { ParticleSystem } from './src/js/ParticleSystem.js'
-import { ComplexityViewer } from './src/js/ComplexityViewer.js'
 import { wasmLoader } from './src/js/WasmLoader.js'
 
 // App state
@@ -22,7 +20,6 @@ let textEditor = null
 let predictor = new Predictor()
 let audioSystem = new AudioSystem()
 let particleSystem = null
-let complexityViewer = null
 
 // Initialize application
 async function initApp() {
@@ -148,19 +145,12 @@ function setupTextEditor() {
     const particleCanvas = document.getElementById('particleCanvas')
     particleSystem = new ParticleSystem(particleCanvas)
 
-    // Complexity Viewer
-    complexityViewer = new ComplexityViewer('complexityDashboard')
-    complexityViewer.render()
-
     // Set placeholder text for demo
     editorElement.focus()
 
     // Audio integration
     textEditor.on('type', () => {
         audioSystem.playTypeSound()
-
-        // Complexity Update
-        updateComplexity('insert')
 
         // Spawn particles at cursor
         const selection = window.getSelection()
@@ -174,7 +164,6 @@ function setupTextEditor() {
     // Undo/Redo particles
     textEditor.on('undo', () => {
         audioSystem.playPopSound()
-        updateComplexity('undo')
         // Spawn a burst in center
         const rect = document.getElementById('visualizationCanvas').getBoundingClientRect()
         particleSystem.spawn(rect.left + rect.width / 2, rect.top + rect.height / 2, '#ef4444', 20)
@@ -182,7 +171,6 @@ function setupTextEditor() {
 
     textEditor.on('redo', () => {
         audioSystem.playPushSound()
-        updateComplexity('redo')
         const rect = document.getElementById('visualizationCanvas').getBoundingClientRect()
         particleSystem.spawn(rect.left + rect.width / 2, rect.top + rect.height / 2, '#10b981', 20)
     })
@@ -226,7 +214,6 @@ function setupSearch() {
 
         if (count > 0) {
             showStatus(`Found "${query}" ${count} time${count !== 1 ? 's' : ''}`, 'success')
-            updateComplexity('search')
 
             // Visual feedback: try to select the word
             // We use window.find() as a simple way to highlight the text in the browser
@@ -277,8 +264,8 @@ function switchDataStructure(ds) {
         linkedlist: 'Character Sequence',
         hashmap: 'Word Frequency',
         trie: 'Autocomplete Trie',
-        graph: 'Full Text Trie (Trie-2)',
-        huffman: 'Huffman Coding Tree'
+        huffman: 'Huffman Coding Tree',
+        spellcheck: 'BK-Tree Spell Checker'
     }
     document.getElementById('vizTitle').textContent = titles[ds]
 
@@ -341,6 +328,16 @@ function updateControls(ds) {
             <span style="font-size: 12px; color: #94a3b8;">Tree built from character frequency</span>
         </div>
       </div>
+    `,
+        spellcheck: `
+      <div class="control-group">
+        <label for="toleranceSlider">Edit Distance Tolerance:</label>
+        <div class="control-row">
+          <input type="range" id="toleranceSlider" min="1" max="3" value="2" class="slider" style="flex: 1;">
+          <span id="toleranceValue" style="margin-left: 8px; color: var(--accent-primary);">2</span>
+        </div>
+        <p class="control-hint" style="font-size: 12px; color: #94a3b8; margin-top: 8px;">Type misspelled words to see spell check suggestions</p>
+      </div>
     `
     }
 
@@ -364,6 +361,21 @@ function updateControls(ds) {
             checkbox.addEventListener('change', () => {
                 if (currentVisualizer && currentVisualizer.setShowGapDetails) {
                     currentVisualizer.setShowGapDetails(checkbox.checked)
+                }
+            })
+        }
+    }
+
+    if (ds === 'spellcheck') {
+        const slider = document.getElementById('toleranceSlider')
+        const valueDisplay = document.getElementById('toleranceValue')
+        if (slider && valueDisplay) {
+            slider.addEventListener('input', (e) => {
+                const value = parseInt(e.target.value)
+                valueDisplay.textContent = value
+                if (currentVisualizer && currentVisualizer.setTolerance) {
+                    currentVisualizer.setTolerance(value)
+                    currentVisualizer.draw()
                 }
             })
         }
@@ -392,11 +404,11 @@ function initializeVisualizer(ds) {
         case 'trie':
             currentVisualizer = new TrieVisualizer(canvas, ctx)
             break
-        case 'graph':
-            currentVisualizer = new GraphVisualizer(canvas, ctx)
-            break
         case 'huffman':
             currentVisualizer = new HuffmanVisualizer(canvas, ctx)
+            break
+        case 'spellcheck':
+            currentVisualizer = new BKTreeVisualizer(canvas, ctx)
             break
     }
 
@@ -421,60 +433,6 @@ function resetCurrentDS() {
     }
 }
 
-function updateComplexity(action) {
-    if (!complexityViewer) return
-
-    let complexity = 'O(1)'
-    let operation = 'Operation'
-    let description = 'Constant time operation'
-
-    // Stack
-    if (currentDS === 'stack') {
-        if (action === 'insert' || action === 'redo') {
-            complexity = 'O(1)'
-            operation = 'Push'
-            description = 'Adding to top of stack'
-        } else if (action === 'undo') {
-            complexity = 'O(1)'
-            operation = 'Pop'
-            description = 'Removing from top of stack'
-        }
-    }
-    // Linked List
-    else if (currentDS === 'linkedlist') {
-        if (action === 'insert') {
-            complexity = 'O(1)'
-            operation = 'Append'
-            description = 'Adding to end (with tail pointer)'
-        } else if (action === 'search') {
-            complexity = 'O(n)'
-            operation = 'Traversal'
-            description = 'Linear search through nodes'
-        }
-    }
-    // Hash Map
-    else if (currentDS === 'hashmap') {
-        if (action === 'insert') {
-            complexity = 'O(1)' // Amortized
-            operation = 'Insert'
-            description = 'Hashing key to index'
-        } else if (action === 'search') {
-            complexity = 'O(1)'
-            operation = 'Lookup'
-            description = 'Direct access via hash'
-        }
-    }
-    // Trie
-    else if (currentDS === 'trie') {
-        if (action === 'insert' || action === 'search') {
-            complexity = 'O(k)'
-            operation = action === 'insert' ? 'Insert' : 'Search'
-            description = 'Proportional to word length (k)'
-        }
-    }
-
-    complexityViewer.update(complexity, operation, description)
-}
 
 // Text Editor operations
 window.editorUndo = () => {
