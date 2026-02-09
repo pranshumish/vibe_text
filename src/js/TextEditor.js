@@ -1,4 +1,6 @@
 import { getCursorPosition, setCursorPosition, debounce } from './utils.js'
+import { VersionHistory } from './VersionHistory.js'
+import { BracketMatcher } from './BracketMatcher.js'
 
 /**
  * TextEditor class - manages the contenteditable text area and state
@@ -6,20 +8,22 @@ import { getCursorPosition, setCursorPosition, debounce } from './utils.js'
 export class TextEditor {
     constructor(element) {
         this.element = element
-        this.undoStack = []
-        this.redoStack = []
+        // Replace linear stacks with branching version history
+        this.history = new VersionHistory('')
+        this.bracketMatcher = new BracketMatcher()
         this.maxHistorySize = 50
+        this.showingRedoChildSelector = false
         this.listeners = {
             'change': [],
             'undo': [],
             'redo': [],
             'cursorMove': [],
             'predict': [],
-            'type': []
+            'type': [],
+            'historyUpdate': [] // New event for version tree updates
         }
 
         this.setupEventListeners()
-        this.saveState() // Initial state
         this.currentSuggestion = null
     }
 
@@ -84,6 +88,16 @@ export class TextEditor {
             else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
                 e.preventDefault()
                 this.redo()
+            }
+            // Ctrl+Q: Select redo child (if multiple branches exist)
+            else if ((e.ctrlKey || e.metaKey) && e.key === 'q') {
+                e.preventDefault()
+                this.showRedoChildSelector()
+            }
+            // Ctrl+B: Go to matching bracket
+            else if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+                e.preventDefault()
+                this.goToMatchingBracket()
             }
         })
     }
@@ -180,66 +194,37 @@ export class TextEditor {
 
     saveState() {
         const currentText = this.getText()
-
-        // Don't save if it's the same as the last state
-        if (this.undoStack.length > 0 && this.undoStack[this.undoStack.length - 1] === currentText) {
-            return
-        }
-
-        this.undoStack.push(currentText)
-
-        // Limit history size
-        if (this.undoStack.length > this.maxHistorySize) {
-            this.undoStack.shift()
-        }
-
-        // Clear redo stack when new action is performed
-        this.redoStack = []
+        
+        // Add version to history tree (creates branch if needed)
+        this.history.addVersion(currentText)
+        this.emit('historyUpdate', this.history)
     }
 
     undo() {
-        // Ensure pending changes are saved before undoing
-        const currentText = this.getText()
-        if (this.undoStack.length === 0 || (this.undoStack.length > 0 && this.undoStack[this.undoStack.length - 1] !== currentText)) {
-            this.saveState()
+        const previousContent = this.history.undo()
+        if (previousContent !== null) {
+            this.setText(previousContent)
+            this.emit('undo', previousContent)
+            this.emit('change', previousContent)
+            this.emit('historyUpdate', this.history)
         }
-
-        if (this.undoStack.length <= 1) return // Keep at least one state
-
-        const currentState = this.undoStack.pop()
-        this.redoStack.push(currentState)
-
-        const previousState = this.undoStack[this.undoStack.length - 1]
-        this.setText(previousState)
-
-        this.emit('undo', previousState)
-        this.emit('change', previousState)
     }
 
     redo() {
-        // If we have unsaved changes, that counts as a new branch of history
-        // triggering saveState which (correctly) clears the redo stack.
-        const currentText = this.getText()
-        if (this.undoStack.length > 0 && this.undoStack[this.undoStack.length - 1] !== currentText) {
-            this.saveState()
-            return // Redo stack is now empty
+        const nextContent = this.history.redo()
+        if (nextContent !== null) {
+            this.setText(nextContent)
+            this.emit('redo', nextContent)
+            this.emit('change', nextContent)
+            this.emit('historyUpdate', this.history)
         }
-
-        if (this.redoStack.length === 0) return
-
-        const nextState = this.redoStack.pop()
-        this.undoStack.push(nextState)
-        this.setText(nextState)
-
-        this.emit('redo', nextState)
-        this.emit('change', nextState)
     }
 
     clear() {
         this.setText('')
-        this.undoStack = ['']
-        this.redoStack = []
+        this.history = new VersionHistory('')
         this.emit('change', '')
+        this.emit('historyUpdate', this.history)
     }
 
     on(event, callback) {
@@ -255,10 +240,65 @@ export class TextEditor {
     }
 
     getUndoStack() {
-        return [...this.undoStack]
+        // For backward compatibility with StackVisualizer
+        const path = []
+        let node = this.history.currentNode
+        while (node) {
+            path.unshift(node.content)
+            node = node.parent
+        }
+        return path
     }
 
     getRedoStack() {
-        return [...this.redoStack]
+        // Return children as potential redo options
+        return this.history.currentNode.children.map(child => child.content)
+    }
+
+    showRedoChildSelector() {
+        const children = this.history.currentNode.children
+        if (children.length === 0) {
+            return // No redo options
+        }
+        
+        if (children.length === 1) {
+            // Only one option, just redo
+            this.redo()
+            return
+        }
+
+        // Multiple branches - show selector
+        this.showingRedoChildSelector = true
+        this.emit('showRedoSelector', children)
+    }
+
+    selectRedoChild(index) {
+        const children = this.history.currentNode.children
+        if (index >= 0 && index < children.length) {
+            const targetNode = children[index]
+            const content = this.history.jumpTo(targetNode.id)
+            if (content !== null) {
+                this.setText(content)
+                this.emit('redo', content)
+                this.emit('change', content)
+                this.emit('historyUpdate', this.history)
+            }
+        }
+        this.showingRedoChildSelector = false
+    }
+
+    goToMatchingBracket() {
+        const text = this.getText()
+        const cursorPos = this.getCursorPosition()
+        
+        const matchPos = this.bracketMatcher.findMatchingBracket(text, cursorPos)
+        if (matchPos !== null) {
+            setCursorPosition(this.element, matchPos)
+            this.emit('cursorMove', matchPos)
+        }
+    }
+
+    getBracketAnalysis() {
+        return this.bracketMatcher.analyze(this.getText())
     }
 }
