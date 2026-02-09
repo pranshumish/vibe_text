@@ -63,7 +63,8 @@ export class StackVisualizer {
         const boxHeight = 40
         const spacing = 5
         const maxVisibleItems = Math.floor((canvas.height - 80) / (boxHeight + spacing))
-        const startY = canvas.height - 30
+        // Adjust startY to ensure bottom element is fully visible
+        const startY = canvas.height - 30 - boxHeight
 
         // Show only recent items
         const visibleStack = stack.slice(-maxVisibleItems)
