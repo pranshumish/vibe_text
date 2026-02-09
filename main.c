@@ -33,6 +33,8 @@ void displayMenu() {
     printf(" 20. Load File\n");
     printf(" 21. Save File\n");
     printf(" 22. Display Text\n");
+    printf("\nVISUALIZATION:\n");
+    printf(" 23. Visualize Linked List Structure\n");
     printf("  0. Exit\n");
     printf("======================================\n");
     printf("Enter your choice: ");
@@ -326,6 +328,10 @@ int main() {
                 
             case 22:  // Display Text
                 displayText(currentEditor);
+                break;
+                
+            case 23:  // Visualize Linked List Structure
+                visualizeLinkedList(currentEditor);
                 break;
                 
             case 0:  // Exit

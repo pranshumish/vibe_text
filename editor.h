@@ -98,6 +98,10 @@ int getCharCount(Editor *e);
 // Display text with cursor
 void displayText(Editor *e);
 
+// Visualize the doubly linked list structure with cursor position
+void visualizeLinkedList(Editor *e);
+
+
 // ========== INTERMEDIATE FEATURES ==========
 
 // Undo last operation (Stack pop)

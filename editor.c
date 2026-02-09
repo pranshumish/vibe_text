@@ -301,6 +301,141 @@ void displayText(Editor *e) {
     printf("Characters: %d | Words: %d | Lines: %d\n\n", getCharCount(e), getWordCount(e), e->lineCount + 1);
 }
 
+// Visualize the doubly linked list structure with cursor position
+// DATA STRUCTURE: Doubly Linked List - shows nodes, connections, and live cursor position
+void visualizeLinkedList(Editor *e) {
+    printf("\n========== LINKED LIST VISUALIZATION ==========\n");
+    printf("Legend: [HEAD] <-> [char] <-> ... <-> [TAIL]\n");
+    printf("        ^^^^^ = Cursor position\n");
+    printf("        <->   = Bidirectional links (prev/next pointers)\n\n");
+    
+    Node *current = e->head;
+    int position = -1; // HEAD is at position -1
+    int cursorPosition = -1;
+    
+    // Find cursor position
+    Node *temp = e->head;
+    int pos = -1;
+    while (temp != NULL) {
+        if (temp == e->cursor) {
+            cursorPosition = pos;
+            break;
+        }
+        temp = temp->next;
+        pos++;
+    }
+    
+    // Print the linked list structure
+    printf("Position: ");
+    position = -1;
+    current = e->head;
+    while (current != NULL) {
+        if (current == e->head) {
+            printf("%-6d", position);
+        } else if (current == e->tail) {
+            printf("  %-6d", position);
+        } else {
+            printf("  %-6d", position);
+        }
+        current = current->next;
+        position++;
+    }
+    printf("\n");
+    
+    // Print the nodes
+    printf("Nodes:    ");
+    current = e->head;
+    while (current != NULL) {
+        if (current == e->head) {
+            printf("[HEAD]");
+        } else if (current == e->tail) {
+            printf("<-[TAIL]");
+        } else {
+            // Display character (handle special characters)
+            if (current->data == '\n') {
+                printf("<-[\\n]");
+            } else if (current->data == '\t') {
+                printf("<-[\\t]");
+            } else if (current->data == ' ') {
+                printf("<-[ ]");
+            } else {
+                printf("<-[%c]", current->data);
+            }
+        }
+        current = current->next;
+    }
+    printf("\n");
+    
+    // Print cursor indicator
+    printf("Cursor:   ");
+    position = -1;
+    current = e->head;
+    while (current != NULL) {
+        if (position == cursorPosition) {
+            if (current == e->head) {
+                printf("^^^^^");
+            } else {
+                printf("  ^^^^^");
+            }
+        } else {
+            if (current == e->head) {
+                printf("     ");
+            } else {
+                printf("       ");
+            }
+        }
+        current = current->next;
+        position++;
+    }
+    printf("\n");
+    
+    // Print memory addresses (simplified)
+    printf("\nMemory:   ");
+    current = e->head;
+    while (current != NULL) {
+        if (current == e->head) {
+            printf("[%p]", (void*)current);
+        } else {
+            printf("<-[%p]", (void*)current);
+        }
+        current = current->next;
+    }
+    printf("\n");
+    
+    // Print statistics
+    printf("\n--- Linked List Statistics ---\n");
+    printf("Total Nodes: %d (excluding HEAD and TAIL sentinels)\n", e->length);
+    printf("Cursor Position: %d\n", cursorPosition);
+    printf("Cursor Row: %d, Column: %d\n", e->cursorRow, e->cursorCol);
+    
+    // Show what's at cursor
+    if (e->cursor == e->head) {
+        printf("Cursor is at: HEAD (before first character)\n");
+    } else if (e->cursor->next == e->tail) {
+        printf("Cursor is at: End of text (after last character)\n");
+    } else {
+        printf("Cursor is at: After '");
+        if (e->cursor->data == '\n') {
+            printf("\\n");
+        } else if (e->cursor->data == '\t') {
+            printf("\\t");
+        } else {
+            printf("%c", e->cursor->data);
+        }
+        printf("', before '");
+        if (e->cursor->next->data == '\n') {
+            printf("\\n");
+        } else if (e->cursor->next->data == '\t') {
+            printf("\\t");
+        } else {
+            printf("%c", e->cursor->next->data);
+        }
+        printf("'\n");
+    }
+    
+    printf("===============================================\n\n");
+}
+
 // ========== INTERMEDIATE FEATURES ==========
 
 // Undo last operation using stack

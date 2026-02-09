@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VibeText</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css">
+</head>
+
+<body>
+  <div id="app">
+    <canvas id="particleCanvas" style="position: fixed; top: 0; left: 0; pointer-events: none; z-index: 9999;"></canvas>
+    <!-- Navigation -->
+    <nav class="navbar">
+      <div class="nav-brand">
+        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" />
+          <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" />
+          <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+        <h1>VibeText</h1>
+      </div>
+      <div class="nav-tabs">
+        <button class="nav-tab active" data-ds="stack">Stack</button>
+        <button class="nav-tab" data-ds="linkedlist">Linked List</button>
+        <button class="nav-tab" data-ds="hashmap">Hash Map</button>
+        <button class="nav-tab" data-ds="trie">Trie</button>
+        <button class="nav-tab" data-ds="graph">Trie-2</button>
+        <button class="nav-tab" data-ds="huffman">Huffman</button>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="content">
+      <!-- Left Panel: Text Editor -->
+      <div class="panel editor-panel">
+        <div class="panel-header">
+          <h2>Text Editor</h2>
+          <div class="header-actions">
+            <div class="search-box">
+              <input type="text" id="findInput" placeholder="Find word..." class="search-input">
+              <button id="findBtn" class="icon-btn" title="Find using HashMap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+              </button>
+            </div>
+            <button id="saveBtn" class="icon-btn" title="Save to file">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                <polyline points="7 3 7 8 15 8"></polyline>
+              </svg>
+            </button>
+            <button id="openBtn" class="icon-btn" title="Open file">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="12" y1="18" x2="12" y2="12"></line>
+                <polyline points="9 15 12 12 15 15"></polyline>
+              </svg>
+            </button>
+            <input type="file" id="fileInput" accept=".txt" style="display: none;">
+            <button id="clearBtn" class="icon-btn" title="Clear text">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div id="textEditor" class="text-editor" contenteditable="true" spellcheck="false"></div>
+        <div class="editor-stats">
+          <span id="charCount">0 characters</span>
+          <span id="wordCount">0 words</span>
+          <span id="lineCount">1 line</span>
+        </div>
+      </div>
+
+      <!-- Right Panel: Visualization & Controls -->
+      <div class="panel viz-panel">
+        <div class="panel-header">
+          <h2 id="vizTitle">Stack Visualization</h2>
+          <button id="resetBtn" class="btn-secondary">Reset</button>
+        </div>
+        <div id="complexityDashboard"></div>
+
+        <!-- Controls -->
+        <div id="controls" class="controls">
+          <!-- Dynamic controls will be inserted here -->
+        </div>
+
+        <!-- Visualization Canvas -->
+        <div class="viz-container">
+          <canvas id="visualizationCanvas"></canvas>
+          <div id="statusMessage" class="status-message"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="/main.js"></script>
+</body>
+
+</html>
