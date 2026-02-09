@@ -7,11 +7,10 @@ export class GraphVisualizer {
     }
 
     updateFromText(text, textEditor) {
-        // Rebuild trie from all words in text
-        this.root = { children: {}, isEnd: false }
-        this.words = []
+        this.resetInternal()
 
         const words = text.match(/\b[a-zA-Z]+\b/gi) || []
+        // Filter unique words and sort generic validation
         const uniqueWords = [...new Set(words.map(w => w.toLowerCase()))]
 
         uniqueWords.forEach(word => {
@@ -20,156 +19,203 @@ export class GraphVisualizer {
         this.draw()
     }
 
-    insert(word) {
-        let node = this.root
-        for (const char of word) {
-            if (!node.children[char]) {
-                node.children[char] = { children: {}, isEnd: false, char }
-            }
-            node = node.children[char]
-        }
-        node.isEnd = true
-        if (!this.words.includes(word)) {
-            this.words.push(word)
-        }
+    resetInternal() {
+        this.root = { children: {}, isEnd: false }
+        this.words = []
     }
 
     reset() {
-        this.root = { children: {}, isEnd: false }
-        this.words = []
+        this.resetInternal()
         this.draw()
+    }
+
+    insert(word) {
+        let node = this.root
+        let currentSuffix = word
+
+        while (currentSuffix.length > 0) {
+            // Find if any existing edge starts with the same character
+            const matchChar = currentSuffix[0]
+            const edgeKey = Object.keys(node.children).find(k => k.startsWith(matchChar))
+
+            if (!edgeKey) {
+                // Case 1: No edge starts with this char. Create new edge.
+                node.children[currentSuffix] = { children: {}, isEnd: true }
+                return
+            }
+
+            // Calculate common prefix length
+            let commonLen = 0
+            while (commonLen < edgeKey.length && commonLen < currentSuffix.length && edgeKey[commonLen] === currentSuffix[commonLen]) {
+                commonLen++
+            }
+
+            // Case 2: Edge is a prefix of the word (e.g. Edge="app", Word="apple")
+            // Traverse down
+            if (commonLen === edgeKey.length) {
+                node = node.children[edgeKey]
+                currentSuffix = currentSuffix.substring(commonLen)
+
+                if (currentSuffix.length === 0) {
+                    node.isEnd = true
+                    return
+                }
+                continue // Continue with the remaining suffix from the new node
+            }
+
+            // Case 3: Word is a prefix of Edge (e.g. Edge="apple", Word="app")
+            // Split edge: "apple" -> "app" -> "le"
+            if (commonLen === currentSuffix.length) {
+                const oldChild = node.children[edgeKey]
+                const commonStr = currentSuffix
+                const remainingEdge = edgeKey.substring(commonLen)
+
+                const splitNode = { children: {}, isEnd: true } // Current word ends here
+                splitNode.children[remainingEdge] = oldChild
+
+                delete node.children[edgeKey]
+                node.children[commonStr] = splitNode
+                return
+            }
+
+            // Case 4: Mismatch in middle (e.g. Edge="apple", Word="apply")
+            // Split edge: "apple" -> "appl" -> ("e", "y")
+            {
+                const oldChild = node.children[edgeKey]
+                const commonStr = edgeKey.substring(0, commonLen)
+                const remainingEdge = edgeKey.substring(commonLen)
+                const remainingWord = currentSuffix.substring(commonLen)
+
+                const splitNode = { children: {}, isEnd: false }
+
+                // Old branch
+                splitNode.children[remainingEdge] = oldChild
+
+                // New branch
+                splitNode.children[remainingWord] = { children: {}, isEnd: true }
+
+                delete node.children[edgeKey]
+                node.children[commonStr] = splitNode
+                return
+            }
+        }
     }
 
     draw() {
         const ctx = this.ctx
         const canvas = this.canvas
-
         ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-        if (this.words.length === 0) {
+        if (Object.keys(this.root.children).length === 0) {
             ctx.fillStyle = '#94a3b8'
             ctx.font = '16px Inter'
             ctx.textAlign = 'center'
-            ctx.textBaseline = 'middle'
-            ctx.fillText('No words in text editor', canvas.width / 2, canvas.height / 2)
+            ctx.fillText('Type text to generate Compressed Trie', canvas.width / 2, canvas.height / 2)
             return
         }
 
-        // Calculate tree layout
-        const startY = 60
-        const centerX = canvas.width / 2
-
-        // Draw info
-        ctx.fillStyle = '#667eea'
-        ctx.font = 'bold 16px Inter'
-        ctx.textAlign = 'center'
-        ctx.fillText('Full Text Trie (All Words)', canvas.width / 2, 25)
+        // Draw Root Node
+        const rootX = canvas.width / 2
+        const rootY = 60
 
         ctx.fillStyle = '#94a3b8'
         ctx.font = '12px Inter'
-        ctx.fillText(`${this.words.length} unique words`, canvas.width / 2, 45)
+        ctx.textAlign = 'center'
+        ctx.fillText('ROOT', rootX, rootY - 15)
 
+        this.drawNodeCircle(rootX, rootY, this.root.isEnd, true)
 
-        // Draw root
-        this.drawNode(centerX, startY, 'ROOT', false, true)
+        // Title
+        ctx.fillStyle = '#667eea'
+        ctx.font = 'bold 16px Inter'
+        ctx.textAlign = 'center'
+        ctx.fillText('Compressed Trie (Patricia Trie)', canvas.width / 2, 30)
 
-        // Draw tree recursively
-        this.drawTree(this.root, centerX, startY, canvas.width - 40, 1)
+        // Draw Tree
+        // Start recursive drawing with root's spread
+        this.drawTreeRecursive(this.root, rootX, rootY, canvas.width - 40)
     }
 
-    drawTree(node, x, y, spread, level) {
+    drawTreeRecursive(node, x, y, spread) {
         const ctx = this.ctx
-        const children = Object.values(node.children).sort((a, b) => a.char.localeCompare(b.char))
+        const childrenKeys = Object.keys(node.children || {}).sort()
 
-        if (children.length === 0) return
+        if (childrenKeys.length === 0) return
 
         const levelHeight = 60
         const childY = y + levelHeight
 
-        // Adjust spread based on level to prevent overlap at deep levels
-        const activeSpread = Math.max(spread, children.length * 30)
+        // Determine spread for children
+        const minChildWidth = 50 // Minimum width per child
+        const requiredWidth = childrenKeys.length * minChildWidth
 
-        const childSpread = activeSpread / children.length
-        const startX = x - (activeSpread / 2) + (childSpread / 2)
+        // Use the larger of available spread or required width to prevent overlap
+        // If we are deep in the tree, usually spread gets smaller, but we must expand if needed
+        const actualSpread = Math.max(spread, requiredWidth)
 
-        children.forEach((child, index) => {
-            const childX = startX + index * childSpread
+        // Each child gets a slice of this spread
+        const childSlice = actualSpread / childrenKeys.length
 
-            // Draw line to child
-            ctx.strokeStyle = 'rgba(102, 126, 234, 0.4)'
-            ctx.lineWidth = 2
+        // Start X position: Center of the spread area relative to parent X
+        let currentX = x - (actualSpread / 2) + (childSlice / 2)
+
+        childrenKeys.forEach(key => {
+            const childNode = node.children[key]
+
+            // Draw Line
             ctx.beginPath()
-            ctx.moveTo(x, y + 15)
-            ctx.lineTo(childX, childY - 15)
+            ctx.moveTo(x, y + 8) // From bottom of parent
+            ctx.lineTo(currentX, childY - 8) // To top of child
+            ctx.strokeStyle = '#64748b'
+            ctx.lineWidth = 1
             ctx.stroke()
 
-            // Draw edge label (character)
-            const midX = (x + childX) / 2
+            // Draw Edge Label (The Key Segment)
+            const midX = (x + currentX) / 2
             const midY = (y + childY) / 2
-            ctx.fillStyle = '#667eea'
-            ctx.font = 'bold 12px Inter'
+
+            // Label Background
+            ctx.font = 'bold 12px monospace'
+            const textWidth = ctx.measureText(key).width
+            ctx.fillStyle = '#0f172a'
+            ctx.fillRect(midX - textWidth / 2 - 4, midY - 8, textWidth + 8, 16)
+
+            // Label Text
+            ctx.fillStyle = '#fbbf24' // Amber-400
             ctx.textAlign = 'center'
-            ctx.fillText(child.char, midX, midY - 5)
+            ctx.textBaseline = 'middle'
+            ctx.fillText(key, midX, midY)
 
-            // Draw child node
-            this.drawNode(childX, childY, child.char, child.isEnd)
+            // Draw Child Node
+            this.drawNodeCircle(currentX, childY, childNode.isEnd, false)
 
-            // Recursively draw children
-            if (level < 6) { // Limit depth for visualization
-                this.drawTree(child, childX, childY, childSpread * 0.8, level + 1)
-            }
+            // Recurse
+            // Pass a portion of the spread to the child
+            // We reduce it slightly (0.9) to keep children grouped
+            this.drawTreeRecursive(childNode, currentX, childY, childSlice * 0.9)
+
+            currentX += childSlice
         })
     }
 
-    drawNode(x, y, label, isEnd, isRoot = false) {
+    drawNodeCircle(x, y, isEnd, isRoot) {
         const ctx = this.ctx
-        const radius = isRoot ? 20 : 15
+        const radius = isRoot ? 10 : 8
 
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
         ctx.beginPath()
-        ctx.arc(x + 2, y + 2, radius, 0, 2 * Math.PI)
-        ctx.fill()
+        ctx.arc(x, y, radius, 0, Math.PI * 2)
 
-        // Node circle
-        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius)
-        if (isEnd) {
-            gradient.addColorStop(0, '#667eea')
-            gradient.addColorStop(1, '#764ba2')
+        if (isRoot) {
+            ctx.fillStyle = '#475569'
+        } else if (isEnd) {
+            ctx.fillStyle = '#10b981' // Green for word end
         } else {
-            gradient.addColorStop(0, '#1a2237')
-            gradient.addColorStop(1, '#12182b')
+            ctx.fillStyle = '#3b82f6' // Blue for intermediate
         }
-        ctx.fillStyle = gradient
-        ctx.beginPath()
-        ctx.arc(x, y, radius, 0, 2 * Math.PI)
         ctx.fill()
 
-        ctx.strokeStyle = isEnd ? '#667eea' : 'rgba(255, 255, 255, 0.2)'
+        ctx.strokeStyle = '#fff'
         ctx.lineWidth = 2
         ctx.stroke()
-
-        // Label
-        if (!isRoot) {
-            ctx.fillStyle = '#e2e8f0'
-            ctx.font = 'bold 12px Inter'
-            ctx.textAlign = 'center'
-            ctx.textBaseline = 'middle'
-            ctx.fillText(label, x, y)
-        } else {
-            ctx.fillStyle = '#94a3b8'
-            ctx.font = 'bold 10px Inter'
-            ctx.textAlign = 'center'
-            ctx.textBaseline = 'middle'
-            ctx.fillText(label, x, y)
-        }
-
-        // End marker
-        if (isEnd) {
-            ctx.fillStyle = '#10b981'
-            ctx.font = 'bold 10px Inter'
-            ctx.textAlign = 'center'
-            ctx.fillText('✓', x, y + radius + 12)
-        }
     }
 }
