@@ -10,6 +10,64 @@ export class HuffmanVisualizer {
             compressedSize: 0,
             ratio: 0
         }
+        
+        // Zoom and pan state
+        this.zoom = 1.0
+        this.offsetX = 0
+        this.offsetY = 0
+        this.isDragging = false
+        this.lastMouseX = 0
+        this.lastMouseY = 0
+        
+        this.setupZoomPan()
+    }
+    
+    setupZoomPan() {
+        // Mouse wheel for zoom
+        this.canvas.addEventListener('wheel', (e) => {
+            e.preventDefault()
+            const delta = e.deltaY > 0 ? 0.9 : 1.1
+            this.zoom *= delta
+            this.zoom = Math.max(0.1, Math.min(5, this.zoom))
+            this.draw()
+        })
+        
+        // Mouse drag for pan
+        this.canvas.addEventListener('mousedown', (e) => {
+            this.isDragging = true
+            this.lastMouseX = e.offsetX
+            this.lastMouseY = e.offsetY
+            this.canvas.style.cursor = 'grabbing'
+        })
+        
+        this.canvas.addEventListener('mousemove', (e) => {
+            if (this.isDragging) {
+                this.offsetX += e.offsetX - this.lastMouseX
+                this.offsetY += e.offsetY - this.lastMouseY
+                this.lastMouseX = e.offsetX
+                this.lastMouseY = e.offsetY
+                this.draw()
+            }
+        })
+        
+        this.canvas.addEventListener('mouseup', () => {
+            this.isDragging = false
+            this.canvas.style.cursor = 'grab'
+        })
+        
+        this.canvas.addEventListener('mouseleave', () => {
+            this.isDragging = false
+            this.canvas.style.cursor = 'default'
+        })
+        
+        this.canvas.style.cursor = 'grab'
+    }
+    
+    resetZoom() {
+        this.zoom = 1.0
+        this.offsetX = 0
+        this.offsetY = 0
+        this.draw()
     }
 
     updateFromText(text, textEditor) {
@@ -103,6 +161,11 @@ export class HuffmanVisualizer {
             return
         }
 
+        // Apply zoom and pan transforms
+        ctx.save()
+        ctx.translate(this.offsetX, this.offsetY)
+        ctx.scale(this.zoom, this.zoom)
+
         // 1. Draw Stats Header
         ctx.fillStyle = '#667eea'
         ctx.font = 'bold 16px Inter'
@@ -119,6 +182,9 @@ export class HuffmanVisualizer {
 
         // 3. Draw Tree (Right Side area)
         this.drawTree(this.tree, canvas.width * 0.6, 80, canvas.width * 0.4, 1)
+        
+        // Restore context
+        ctx.restore()
     }
 
     drawTable(x, y) {

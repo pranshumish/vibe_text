@@ -8,8 +8,66 @@ export class TreeVisualizer {
         this.siblingSpacing = 40;
         this.nodePositions = new Map(); // id -> {x, y}
         
+        // Zoom and pan state
+        this.zoom = 1.0;
+        this.offsetX = 0;
+        this.offsetY = 0;
+        this.isDragging = false;
+        this.lastMouseX = 0;
+        this.lastMouseY = 0;
+        
+        this.setupZoomPan();
+        
         // Handle clicks
         this.canvas.addEventListener('click', this.handleClick.bind(this));
+    }
+    
+    setupZoomPan() {
+        // Mouse wheel for zoom
+        this.canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            this.zoom *= delta;
+            this.zoom = Math.max(0.1, Math.min(5, this.zoom));
+            this.draw();
+        });
+        
+        // Mouse drag for pan
+        this.canvas.addEventListener('mousedown', (e) => {
+            this.isDragging = true;
+            this.lastMouseX = e.offsetX;
+            this.lastMouseY = e.offsetY;
+            this.canvas.style.cursor = 'grabbing';
+        });
+        
+        this.canvas.addEventListener('mousemove', (e) => {
+            if (this.isDragging) {
+                this.offsetX += e.offsetX - this.lastMouseX;
+                this.offsetY += e.offsetY - this.lastMouseY;
+                this.lastMouseX = e.offsetX;
+                this.lastMouseY = e.offsetY;
+                this.draw();
+            }
+        });
+        
+        this.canvas.addEventListener('mouseup', () => {
+            this.isDragging = false;
+            this.canvas.style.cursor = 'grab';
+        });
+        
+        this.canvas.addEventListener('mouseleave', () => {
+            this.isDragging = false;
+            this.canvas.style.cursor = 'default';
+        });
+        
+        this.canvas.style.cursor = 'grab';
+    }
+    
+    resetZoom() {
+        this.zoom = 1.0;
+        this.offsetX = 0;
+        this.offsetY = 0;
+        this.draw();
     }
 
     updateFromHistory(history) {
@@ -41,8 +99,9 @@ export class TreeVisualizer {
         if (!this.history) return;
 
         const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        // Transform click coordinates to account for zoom/pan
+        const x = (e.clientX - rect.left - this.offsetX) / this.zoom;
+        const y = (e.clientY - rect.top - this.offsetY) / this.zoom;
 
         // Check if any node was clicked
         for (const [id, pos] of this.nodePositions) {
@@ -99,11 +158,19 @@ export class TreeVisualizer {
         const root = graph.root;
         this.calculatePositions(root, canvas.width / 2, 40, canvas.width / 4);
 
+        // Apply zoom and pan transforms
+        ctx.save();
+        ctx.translate(this.offsetX, this.offsetY);
+        ctx.scale(this.zoom, this.zoom);
+
         // Draw connections first
         this.drawConnections(root);
 
         // Draw nodes
         this.drawNodes(root, graph.currentNodeId);
+        
+        // Restore context
+        ctx.restore();
     }
 
     calculatePositions(node, x, y, offset) {

@@ -251,8 +251,29 @@ export class TextEditor {
     }
 
     getRedoStack() {
-        // Return children as potential redo options
-        return this.history.currentNode.children.map(child => child.content)
+        // For StackVisualizer: return the path of the most recent child branch
+        // This gives a linear redo stack visualization
+        if (!this.history.currentNode || !this.history.currentNode.children || this.history.currentNode.children.length === 0) {
+            return []
+        }
+        
+        // Get the most recent child (last in array)
+        const mostRecentChild = this.history.currentNode.children[this.history.currentNode.children.length - 1]
+        
+        // Build a path from this child downwards (following most recent children)
+        const path = []
+        let node = mostRecentChild
+        while (node) {
+            path.push(node.content)
+            // Follow the most recent child if it exists
+            if (node.children && node.children.length > 0) {
+                node = node.children[node.children.length - 1]
+            } else {
+                break
+            }
+        }
+        
+        return path
     }
 
     showRedoChildSelector() {
