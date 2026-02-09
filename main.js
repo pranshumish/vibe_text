@@ -9,6 +9,7 @@ import { TreeVisualizer } from './src/js/visualizers/TreeVisualizer.js'
 import { BracketVisualizer } from './src/js/visualizers/BracketVisualizer.js'
 import { TextEditor } from './src/js/TextEditor.js'
 import { getTextStats, getWordFrequency } from './src/js/utils.js'
+import { HuffmanCoder } from './src/js/HuffmanCoder.js'
 
 import { Predictor } from './src/js/Predictor.js'
 import { AudioSystem } from './src/js/AudioSystem.js'
@@ -118,6 +119,34 @@ function setupTextEditor() {
         showStatus('File saved', 'success')
     })
 
+    // Save Compressed File
+    document.getElementById('saveCompressedBtn')?.addEventListener('click', () => {
+        const text = textEditor.getText()
+        if (!text) {
+            showStatus('No text to compress', 'error')
+            return
+        }
+
+        const result = HuffmanCoder.encode(text)
+        const data = {
+            version: '1.0',
+            tree: result.tree,
+            compressed: result.compressed,
+            stats: result.stats
+        }
+
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'editor.huff'
+        a.click()
+        URL.revokeObjectURL(url)
+        
+        const ratio = result.stats.ratio.toFixed(1)
+        showStatus(`Compressed file saved (${ratio}% savings)`, 'success')
+    })
+
     // Open File
     const fileInput = document.getElementById('fileInput')
     const openBtn = document.getElementById('openBtn')
@@ -132,12 +161,30 @@ function setupTextEditor() {
 
         const reader = new FileReader()
         reader.onload = (e) => {
-            const text = e.target.result
-            textEditor.setText(text)
-            // Fix: ensure change event fires to update everything
-            textEditor.emit('change', text)
-            textEditor.saveState()
-            showStatus('File loaded', 'success')
+            const content = e.target.result
+            
+            // Check if it's a compressed file
+            if (file.name.endsWith('.huff')) {
+                try {
+                    const data = JSON.parse(content)
+                    const text = HuffmanCoder.decode(data.compressed, data.tree)
+                    textEditor.setText(text)
+                    textEditor.emit('change', text)
+                    textEditor.saveState()
+                    
+                    const ratio = data.stats.ratio.toFixed(1)
+                    showStatus(`Compressed file loaded (was ${ratio}% smaller)`, 'success')
+                } catch (error) {
+                    showStatus('Failed to load compressed file', 'error')
+                    console.error('Decompression error:', error)
+                }
+            } else {
+                // Regular text file
+                textEditor.setText(content)
+                textEditor.emit('change', content)
+                textEditor.saveState()
+                showStatus('File loaded', 'success')
+            }
         }
         reader.readAsText(file)
         fileInput.value = '' // Reset so same file can be selected again

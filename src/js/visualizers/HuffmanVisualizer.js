@@ -4,6 +4,7 @@ export class HuffmanVisualizer {
         this.ctx = ctx
         this.tree = null
         this.codes = {}
+        this.frequencies = {}
         this.stats = {
             originalSize: 0,
             compressedSize: 0,
@@ -22,6 +23,9 @@ export class HuffmanVisualizer {
         for (const char of text) {
             freqs[char] = (freqs[char] || 0) + 1
         }
+        
+        // Store for table display
+        this.frequencies = freqs
 
         // 2. Build Tree
         // Create leaf nodes
@@ -81,6 +85,7 @@ export class HuffmanVisualizer {
     reset() {
         this.tree = null
         this.codes = {}
+        this.frequencies = {}
         this.stats = { originalSize: 0, compressedSize: 0, ratio: 0 }
         this.draw()
     }
@@ -144,11 +149,10 @@ export class HuffmanVisualizer {
         displayChars.forEach(char => {
             const displayChar = char === '\n' ? '↵' : char === ' ' ? 'SPC' : char
             const code = this.codes[char]
+            const freq = this.frequencies[char] || 0
 
-            // Find freq from tree or recompute? simpler to just find node or pass it down.
-            // Let's just grab frequency length for code
             ctx.fillStyle = '#94a3b8'
-            ctx.fillText(`${displayChar.padEnd(4)}  ${code.length}b    ${code}`, x, currentY)
+            ctx.fillText(`${displayChar.padEnd(4)}  ${freq.toString().padStart(4)}  ${code}`, x, currentY)
             currentY += lineHeight
         })
 
